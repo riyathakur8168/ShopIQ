@@ -72,10 +72,11 @@ def send_otp():
         otp = _make_otp()
         _store_otp(f'email:{email_clean}', otp)
 
+
         print(f"\n{'='*60}")
         print(f"[DEV TRACKER] Email OTP Dispatched")
         print(f"Target:   {email_clean}")
-        print(f"OTP Code: {otp}")
+        print(f"oTP Code: {otp}")
         print(f"Expires:  2 minutes")
         print(f"{'='*60}\n", flush=True)
 

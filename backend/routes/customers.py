@@ -70,7 +70,7 @@ def check_phone():
     if exclude_id:
         query = query.filter(Customer.id != exclude_id)
     exists = query.first() is not None
-    return jsonify({'exists': exists}), 200
+    return jsonify({'exists': exists}),200
 
 
 def _validate_and_format_customer(data, uid, exclude_id=None):
