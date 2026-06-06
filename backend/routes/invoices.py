@@ -11,7 +11,6 @@ invoices_bp = Blueprint('invoices', __name__, url_prefix='/api/invoices')
 def _uid():
     return int(get_jwt_identity())
 
-
 @invoices_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_invoices():
