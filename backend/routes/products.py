@@ -137,6 +137,7 @@ def get_notifications():
         Product.user_id == uid,
         Product.stock_quantity <= Product.low_stock_threshold
     ).all()
+    
     notifications = []
     for p in products:
         if p.stock_quantity == 0:
