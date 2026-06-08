@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 purchases_bp = Blueprint('purchases', __name__, url_prefix='/api/v1/purchases')
 
-
 def _normalize_indian_phone(phone_str):
     """Normalize phone number to 10 digits (handling +91, 91, or leading 0)."""
     if not phone_str:
