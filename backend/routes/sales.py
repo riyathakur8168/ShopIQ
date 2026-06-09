@@ -239,7 +239,7 @@ def checkout():
         )
         db.session.add(invoice)
         db.session.flush()
-
+        
         # If Udhar, record credit in ledger
         if payment_method == 'Udhar' and customer:
             products_json = json.dumps(invoice_items)
