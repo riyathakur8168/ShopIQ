@@ -8,7 +8,6 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 suppliers_bp = Blueprint('suppliers', __name__, url_prefix='/api/suppliers')
 
-
 def _uid():
     return int(get_jwt_identity())
 
