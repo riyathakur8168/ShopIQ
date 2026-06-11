@@ -18,4 +18,3 @@ except urllib.error.HTTPError as e:
     print("Response body:", e.read().decode())
 except Exception as e:
     print('Error:', e)
-
