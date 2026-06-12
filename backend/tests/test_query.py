@@ -9,6 +9,3 @@ with app.app_context():
         print("Success, found", len(sales), "sales")
     except Exception as e:
         print("ERROR:", str(e))
-
-
-
