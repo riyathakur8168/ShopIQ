@@ -1,0 +1,104 @@
+from flask import Flask
+from config import Config
+from extensions import db, jwt, cors
+from models import User, Product, Sale, Customer, CreditRecord, Invoice
+
+def create_app(config_class=Config):
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
+    db.init_app(app)
+    jwt.init_app(app)
+    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
+
+    from routes.auth import auth_bp
+    from routes.products import products_bp
+    from routes.sales import sales_bp
+    from routes.customers import customers_bp
+    from routes.invoices import invoices_bp
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(products_bp)
+    app.register_blueprint(sales_bp)
+    app.register_blueprint(customers_bp)
+    app.register_blueprint(invoices_bp)
+
+    @app.route('/')
+    def index():
+        return {"message": "ShopIQ API v2.0 — Production Ready"}
+
+    with app.app_context():
+        db.create_all()
+        _seed_demo_data()
+
+    return app
+
+
+def _seed_demo_data():
+    """Insert demo data if DB is empty."""
+    from models import Product, Customer
+    from datetime import date, timedelta
+    from extensions import db
+    from models import Sale
+
+    if Product.query.count() == 0:
+        products = [
+            Product('Amul Milk', 'Dairy', 52, 60, 80, 10),
+            Product('Parle-G', 'Biscuits', 22, 30, 50, 15),
+            Product('Maggi Noodles', 'Food', 14, 20, 100, 20),
+            Product('Tata Tea 250g', 'Beverages', 75, 90, 30, 8),
+            Product('Ariel 1kg', 'Household', 200, 240, 25, 5),
+            Product('Dettol 200ml', 'Health', 65, 80, 40, 10),
+            Product('Colgate 200g', 'Health', 78, 95, 60, 15),
+            Product('Sunflower Oil 1L', 'Food', 130, 155, 20, 5),
+        ]
+        db.session.add_all(products)
+        db.session.commit()
+
+        # Add demo sales for 7 days
+        today = date.today()
+        import random
+        all_products = Product.query.all()
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            for _ in range(random.randint(3, 8)):
+                p = random.choice(all_products)
+                qty = random.randint(1, 5)
+                if p.stock_quantity >= qty:
+                    sale = Sale(
+                        product_id=p.id, quantity=qty,
+                        unit_price=p.sell_price,
+                        total_amount=qty * p.sell_price,
+                        sale_date=d
+                    )
+                    p.stock_quantity -= qty
+                    db.session.add(sale)
+        db.session.commit()
+
+    if Customer.query.count() == 0:
+        customers = [
+            Customer(name='Ramesh Kumar', phone='9876543210', address='12, Gandhi Nagar'),
+            Customer(name='Priya Sharma', phone='9845123456', address='45, Lal Bagh'),
+            Customer(name='Suresh Yadav', phone='9812345678', address='8, MG Road'),
+        ]
+        db.session.add_all(customers)
+        db.session.commit()
+        # Seed credits
+        from models import CreditRecord
+        records = [
+            CreditRecord(customer_id=customers[0].id, record_type='credit', amount=1500, note='Weekly grocery'),
+            CreditRecord(customer_id=customers[0].id, record_type='payment', amount=500, note='Part payment'),
+            CreditRecord(customer_id=customers[1].id, record_type='credit', amount=800, note='Household items'),
+            CreditRecord(customer_id=customers[2].id, record_type='credit', amount=300, note='Snacks'),
+            CreditRecord(customer_id=customers[2].id, record_type='payment', amount=300, note='Full payment'),
+        ]
+        customers[0].total_credit = 1500; customers[0].total_paid = 500
+        customers[1].total_credit = 800
+        customers[2].total_credit = 300; customers[2].total_paid = 300
+        db.session.add_all(records)
+        db.session.commit()
+
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(debug=True, port=5000)
