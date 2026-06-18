@@ -37,6 +37,13 @@ export const getSales = (params) => API.get('/sales/', { params });
 export const addSale = (data) => API.post('/sales/', data);
 export const deleteSale = (id) => API.delete(`/sales/${id}`);
 export const getSalesAnalytics = () => API.get('/sales/analytics');
+export const uploadSalesCSV = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return API.post('/sales/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
 
 // Customers
 export const getCustomers = (params) => API.get('/customers/', { params });

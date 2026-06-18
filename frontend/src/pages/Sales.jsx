@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addSale, getSalesAnalytics } from '../services/api';
+import { getProducts, addSale, getSalesAnalytics, getSales, uploadSalesCSV } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
@@ -56,10 +56,10 @@ function SalesEntryTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const [pRes, aRes] = await Promise.all([getProducts(), getSalesAnalytics()]);
+      const [pRes, aRes, sRes] = await Promise.all([getProducts(), getSalesAnalytics(), getSales({ per_page: 20 })]);
       setProducts(pRes.data);
       setStats(aRes.data.today);
-      setHistory(aRes.data.recent_sales || []);
+      setHistory(sRes.data.sales || []);
     } catch { toast('Failed to load data', 'error'); }
     finally { setLoading(false); }
   };
@@ -84,7 +84,7 @@ function SalesEntryTab() {
       await addSale({
         product_id: form.product_id,
         quantity: form.quantity,
-        total_price: form.quantity * selectedProduct.sell_price,
+        unit_price: selectedProduct.sell_price,
         note: form.note
       });
       toast('Sale recorded successfully!', 'success');
@@ -172,10 +172,10 @@ function SalesEntryTab() {
               <tbody className="divide-y divide-slate-100">
                 {history.map(s => (
                   <tr key={s.id} className="table-row">
-                    <td className="table-cell text-slate-500 text-xs">{new Date(s.sale_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="table-cell text-slate-500 text-xs">{new Date(s.sale_date).toLocaleDateString('en-IN')}</td>
                     <td className="table-cell font-medium text-slate-900">{s.product_name}</td>
                     <td className="table-cell font-semibold text-slate-600">{s.quantity}</td>
-                    <td className="table-cell font-bold text-green-600">₹{s.total_price}</td>
+                    <td className="table-cell font-bold text-green-600">₹{s.total_amount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -188,6 +188,35 @@ function SalesEntryTab() {
 }
 
 function CSVUploadTab() {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [recentUploads, setRecentUploads] = useState([]);
+  const { toast } = useToast();
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await uploadSalesCSV(file);
+      toast(res.data.message, 'success');
+      if (res.data.errors && res.data.errors.length > 0) {
+        res.data.errors.forEach(err => toast(err, 'error'));
+      }
+      setRecentUploads(prev => [{ name: file.name, date: new Date().toLocaleString(), success: res.data.success_count }, ...prev]);
+      setFile(null);
+    } catch (err) {
+      toast(err.response?.data?.message || 'Upload failed', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="card p-8 text-center animate-fade-in max-w-2xl mx-auto mt-8">
       <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -196,16 +225,44 @@ function CSVUploadTab() {
       <h3 className="text-lg font-bold text-slate-900 mb-2">Upload Bulk Sales (CSV)</h3>
       <p className="text-sm text-slate-500 mb-6">Drag and drop your POS export file here to sync offline sales.</p>
       
-      <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 hover:border-primary-500 hover:bg-primary-50 transition-colors cursor-pointer group">
-        <p className="text-sm font-semibold text-slate-600 group-hover:text-primary-700">Click to browse or drag file here</p>
-        <p className="text-xs text-slate-400 mt-2">Supports .csv, .xls, .xlsx (Max 5MB)</p>
-      </div>
+      <label className="border-2 border-dashed border-slate-300 rounded-2xl p-12 hover:border-primary-500 hover:bg-primary-50 transition-colors cursor-pointer group block">
+        <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+        {file ? (
+          <p className="text-sm font-semibold text-primary-700">{file.name}</p>
+        ) : (
+          <p className="text-sm font-semibold text-slate-600 group-hover:text-primary-700">Click to browse or drag file here</p>
+        )}
+        <p className="text-xs text-slate-400 mt-2">Supports .csv (Max 5MB)</p>
+      </label>
+      
+      {file && (
+        <button 
+          onClick={handleUpload} 
+          disabled={uploading}
+          className="btn-primary w-full mt-4 py-3 disabled:opacity-60"
+        >
+          {uploading ? 'Uploading...' : 'Process Upload'}
+        </button>
+      )}
       
       <div className="mt-8 text-left">
         <h4 className="text-sm font-semibold text-slate-900 mb-3">Recent Uploads</h4>
-        <div className="text-sm text-slate-500 border border-slate-200 rounded-lg p-4 bg-slate-50 text-center">
-          No recent uploads found.
-        </div>
+        {recentUploads.length === 0 ? (
+          <div className="text-sm text-slate-500 border border-slate-200 rounded-lg p-4 bg-slate-50 text-center">
+            No recent uploads found.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentUploads.map((u, i) => (
+              <div key={i} className="flex justify-between text-sm p-3 border border-slate-200 rounded-lg">
+                <span className="font-medium text-slate-700">{u.name}</span>
+                <span className="text-slate-500 text-xs text-right">
+                  {u.success} rows <br/> {u.date}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -234,7 +291,7 @@ function AnalyticsTab() {
                 <XAxis dataKey="day" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
                 <Tooltip />
-                <Area type="monotone" dataKey="sales_count" name="Items Sold" stroke="#6366f1" fill="#e0e7ff" strokeWidth={3} />
+                <Area type="monotone" dataKey="sales" name="Items Sold" stroke="#6366f1" fill="#e0e7ff" strokeWidth={3} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

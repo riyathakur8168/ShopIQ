@@ -4,6 +4,8 @@ from models import Sale, Product
 from flask_jwt_extended import jwt_required
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
+import csv
+import io
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/api/sales')
 
@@ -24,7 +26,7 @@ def get_sales():
     if product_id:
         query = query.filter(Sale.product_id == product_id)
 
-    sales = query.order_by(Sale.sale_date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    sales = query.order_by(Sale.sale_date.desc(), Sale.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
     return jsonify({
         'sales': [s.to_dict() for s in sales.items],
         'total': sales.total,
@@ -36,36 +38,129 @@ def get_sales():
 @sales_bp.route('/', methods=['POST'])
 @jwt_required()
 def add_sale():
-    data = request.get_json()
-    required = ['product_id', 'quantity', 'unit_price']
-    if not data or not all(k in data for k in required):
-        return jsonify({'message': 'Missing required fields'}), 400
+    try:
+        data = request.get_json()
+        required = ['product_id', 'quantity', 'unit_price']
+        if not data or not all(k in data for k in required):
+            return jsonify({'message': 'Missing required fields'}), 400
 
-    product = Product.query.get(data['product_id'])
-    if not product:
-        return jsonify({'message': 'Product not found'}), 404
+        product = Product.query.get(int(data['product_id']))
+        if not product:
+            return jsonify({'message': 'Product not found'}), 404
 
-    qty = int(data['quantity'])
-    if product.stock_quantity < qty:
-        return jsonify({'message': f'Insufficient stock. Available: {product.stock_quantity}'}), 400
+        qty = int(data['quantity'])
+        if product.stock_quantity < qty:
+            return jsonify({'message': f'Insufficient stock. Available: {product.stock_quantity}'}), 400
 
-    unit_price = float(data['unit_price'])
-    total = qty * unit_price
+        unit_price = float(data['unit_price'])
+        total = qty * unit_price
 
-    sale = Sale(
-        product_id=data['product_id'],
-        quantity=qty,
-        unit_price=unit_price,
-        total_amount=total,
-        sale_date=datetime.strptime(data.get('sale_date', date.today().strftime('%Y-%m-%d')), '%Y-%m-%d').date(),
-        note=data.get('note', '')
-    )
-    # Deduct stock
-    product.stock_quantity -= qty
+        sale_date_str = data.get('sale_date')
+        if sale_date_str:
+            s_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
+        else:
+            s_date = date.today()
 
-    db.session.add(sale)
-    db.session.commit()
-    return jsonify({'message': 'Sale recorded', 'sale': sale.to_dict()}), 201
+        sale = Sale(
+            product_id=product.id,
+            quantity=qty,
+            unit_price=unit_price,
+            total_amount=total,
+            sale_date=s_date,
+            note=data.get('note', '')
+        )
+        # Deduct stock
+        product.stock_quantity -= qty
+
+        db.session.add(sale)
+        db.session.commit()
+        return jsonify({'message': 'Sale recorded', 'sale': sale.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f'Server error: {str(e)}'}), 500
+
+
+@sales_bp.route('/upload', methods=['POST'])
+@jwt_required()
+def upload_sales():
+    if 'file' not in request.files:
+        return jsonify({'message': 'No file part in the request'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'message': 'No selected file'}), 400
+        
+    if not file.filename.endswith('.csv'):
+        return jsonify({'message': 'Invalid file format. Please upload a CSV file.'}), 400
+
+    try:
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        success_count = 0
+        errors = []
+        
+        for row_num, row in enumerate(csv_reader, start=2):
+            product = None
+            if row.get('product_id') and str(row.get('product_id')).strip():
+                product = Product.query.get(int(row['product_id']))
+            elif row.get('product_name') and str(row.get('product_name')).strip():
+                product = Product.query.filter(func.lower(Product.name) == func.lower(row['product_name'].strip())).first()
+                
+            if not product:
+                errors.append(f"Row {row_num}: Product not found")
+                continue
+                
+            try:
+                qty = int(row.get('quantity', 1))
+                unit_price = float(row.get('unit_price', product.sell_price))
+            except ValueError:
+                errors.append(f"Row {row_num}: Invalid quantity or price format")
+                continue
+                
+            if product.stock_quantity < qty:
+                errors.append(f"Row {row_num}: Insufficient stock for {product.name}")
+                continue
+                
+            sale_date_str = row.get('sale_date', '').strip()
+            if sale_date_str:
+                try:
+                    sale_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    errors.append(f"Row {row_num}: Invalid date format, expected YYYY-MM-DD")
+                    continue
+            else:
+                sale_date = date.today()
+                
+            sale = Sale(
+                product_id=product.id,
+                quantity=qty,
+                unit_price=unit_price,
+                total_amount=qty * unit_price,
+                sale_date=sale_date,
+                note=row.get('note', '')
+            )
+            
+            product.stock_quantity -= qty
+            db.session.add(sale)
+            success_count += 1
+            
+        db.session.commit()
+        
+        if errors and success_count == 0:
+            return jsonify({'message': 'Upload failed completely', 'errors': errors}), 400
+            
+        message = f"Successfully imported {success_count} sales."
+        if errors:
+            message += f" ({len(errors)} rows failed)"
+            
+        return jsonify({
+            'message': message,
+            'success_count': success_count,
+            'errors': errors
+        }), 201
 
 
 @sales_bp.route('/<int:sale_id>', methods=['DELETE'])
