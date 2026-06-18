@@ -9,11 +9,11 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-logout on 401
+// Auto-logout on 401 or 422 (invalid token)
 API.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 || err.response?.status === 422) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

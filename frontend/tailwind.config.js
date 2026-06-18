@@ -5,20 +5,22 @@ export default {
     extend: {
       colors: {
         primary: {
-          50:  '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          900: '#1e1b4b',
+          50:  '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb', // Requested Blue Accent
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
         },
         surface: {
-          DEFAULT: '#0f172a',
-          card: '#1e293b',
-          border: '#334155',
-          hover: '#273549',
+          DEFAULT: '#f8fafc', // Light slate background
+          card: '#ffffff',    // White cards
+          border: '#e2e8f0',  // Light borders
+          hover: '#f1f5f9',   // Light hover state
         },
         success: { 400: '#4ade80', 500: '#22c55e', 100: '#dcfce7', 700: '#15803d' },
         warning: { 400: '#fb923c', 100: '#ffedd5', 700: '#c2410c' },
@@ -28,13 +30,14 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'card':    '0 0 0 1px rgba(99,102,241,0.08), 0 4px 24px -4px rgba(0,0,0,0.3)',
-        'glow':    '0 0 20px rgba(99,102,241,0.3)',
-        'glow-sm': '0 0 10px rgba(99,102,241,0.2)',
+        'card':    '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
+        'card-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+        'glow':    '0 0 20px rgba(37, 99, 235, 0.15)',
+        'glow-sm': '0 0 10px rgba(37, 99, 235, 0.1)',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-brand': 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+        'gradient-brand': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
       },
       animation: {
         'fade-in':    'fadeIn 0.3s ease-out',

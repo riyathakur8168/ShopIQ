@@ -5,6 +5,44 @@ import { useToast } from '../context/ToastContext';
 const EMPTY_FORM = { name: '', category: '', buy_price: '', sell_price: '', stock_quantity: '', low_stock_threshold: 10 };
 
 export default function Inventory() {
+  const [activeTab, setActiveTab] = useState('Products');
+  
+  return (
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+      <div>
+        <h2 className="page-title">Inventory</h2>
+        <p className="page-subtitle">Manage products, stock levels, and automated imports</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-6">
+        {['Products', 'Stock', 'OCR Import'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`pb-3 text-sm font-semibold transition-colors relative ${
+              activeTab === tab ? 'text-primary-600' : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600 rounded-t-full" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="pt-2">
+        {activeTab === 'Products' && <ProductsTab />}
+        {activeTab === 'Stock' && <StockTab />}
+        {activeTab === 'OCR Import' && <OCRImportTab />}
+      </div>
+    </div>
+  );
+}
+
+function ProductsTab() {
   const [products, setProducts] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +73,6 @@ export default function Inventory() {
   }, [products, search, catFilter]);
 
   const categories = ['All', ...new Set(products.map(p => p.category).filter(Boolean))];
-  const lowStockItems = products.filter(p => p.is_low_stock);
 
   const openEdit = (p) => {
     setEditProduct(p);
@@ -76,42 +113,15 @@ export default function Inventory() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="page-title">Inventory</h2>
-          <p className="page-subtitle">Manage products, stock levels, and pricing</p>
-        </div>
-        <button className="btn-primary shadow-sm" onClick={() => { setShowForm(!showForm); setEditProduct(null); setForm(EMPTY_FORM); }}>+ Add Product</button>
+        <h3 className="text-sm font-semibold text-slate-900">Product Catalog</h3>
+        <button className="btn-primary shadow-sm" onClick={() => { setShowForm(!showForm); setEditProduct(null); setForm(EMPTY_FORM); }}>
+          {showForm ? 'Close Form' : '+ Add Product'}
+        </button>
       </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total Products',   value: products.length,        color: 'text-primary-600' },
-          { label: 'Low Stock',        value: lowStockItems.length,   color: 'text-orange-600' },
-          { label: 'Out of Stock',     value: products.filter(p => p.stock_quantity === 0).length, color: 'text-red-600' },
-        ].map(s => (
-          <div key={s.label} className="stat-card">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{s.label}</p>
-            <h3 className={`text-2xl font-black ${s.color}`}>{s.value}</h3>
-          </div>
-        ))}
-      </div>
-
-      {/* Low stock alert */}
-      {lowStockItems.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-orange-800 mb-2">⚠ Low Stock Alert</p>
-          <div className="flex flex-wrap gap-2">
-            {lowStockItems.map(p => (
-              <span key={p.id} className="badge-warning bg-orange-100">{p.name} — {p.stock_quantity} left</span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Form */}
       {showForm && (
-        <div className="card p-6 animate-fade-in shadow-md border-indigo-100">
+        <div className="card p-6 animate-fade-in shadow-md border-primary-100 bg-primary-50/30">
           <h3 className="text-sm font-bold text-slate-900 mb-5">{editProduct ? 'Edit Product' : 'Add New Product'}</h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
@@ -125,7 +135,7 @@ export default function Inventory() {
               <div key={f.key} className={f.span === 2 ? 'md:col-span-2' : ''}>
                 <label className="input-label">{f.label}</label>
                 <input required={!['low_stock_threshold'].includes(f.key)} type={f.type} value={form[f.key]} placeholder={f.placeholder}
-                  onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))} className="input bg-slate-50 border-slate-200" />
+                  onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))} className="input bg-white border-slate-200" />
               </div>
             ))}
             {form.buy_price && form.sell_price && (
@@ -156,9 +166,6 @@ export default function Inventory() {
 
       {/* Table */}
       <div className="table-container">
-        <div className="section-header">
-          <h3 className="section-title">Products ({filtered.length})</h3>
-        </div>
         {loading ? (
           <div className="flex items-center justify-center h-40"><span className="spinner" /></div>
         ) : (
@@ -190,6 +197,80 @@ export default function Inventory() {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+function StockTab() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getProducts().then(res => {
+      setProducts(res.data.filter(p => p.is_low_stock || p.stock_quantity === 0));
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <div className="flex justify-center p-12"><span className="spinner"></span></div>;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card">
+          <div className="section-header">
+            <h3 className="section-title">Critical Shortages</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            {products.filter(p => p.stock_quantity === 0).length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">No out-of-stock items.</p>
+            ) : products.filter(p => p.stock_quantity === 0).map(p => (
+              <div key={p.id} className="flex justify-between items-center p-3 border border-red-200 bg-red-50 rounded-lg">
+                <span className="font-semibold text-slate-900">{p.name}</span>
+                <span className="badge badge-danger">Out of Stock</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="section-header">
+            <h3 className="section-title">Reorder Suggestions</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            {products.filter(p => p.is_low_stock && p.stock_quantity > 0).length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">Stock levels are healthy.</p>
+            ) : products.filter(p => p.is_low_stock && p.stock_quantity > 0).map(p => (
+              <div key={p.id} className="flex justify-between items-center p-3 border border-orange-200 bg-orange-50 rounded-lg">
+                <div>
+                  <span className="font-semibold text-slate-900 block">{p.name}</span>
+                  <span className="text-xs text-orange-700">Only {p.stock_quantity} left</span>
+                </div>
+                <button className="text-xs font-semibold bg-white border border-orange-200 text-orange-700 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">
+                  Reorder
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OCRImportTab() {
+  return (
+    <div className="card p-8 text-center animate-fade-in max-w-2xl mx-auto mt-8">
+      <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+      </div>
+      <h3 className="text-lg font-bold text-slate-900 mb-2">Automated Data Entry (OCR)</h3>
+      <p className="text-sm text-slate-500 mb-6">Upload a photo of a vendor bill or stock register, and ShopIQ will extract the products and quantities automatically.</p>
+      
+      <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 hover:border-primary-500 hover:bg-primary-50 transition-colors cursor-pointer group">
+        <p className="text-sm font-semibold text-slate-600 group-hover:text-primary-700">Click to capture or upload image</p>
+        <p className="text-xs text-slate-400 mt-2">Supports JPG, PNG (Max 10MB)</p>
       </div>
     </div>
   );
