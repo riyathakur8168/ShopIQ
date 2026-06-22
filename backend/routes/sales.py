@@ -114,9 +114,12 @@ def upload_sales():
                 continue
                 
             try:
-                qty = int(row.get('quantity', 1))
-                unit_price = float(row.get('unit_price', product.sell_price))
-            except ValueError:
+                qty_val = row.get('quantity')
+                qty = int(qty_val) if qty_val else 1
+                
+                price_val = row.get('unit_price')
+                unit_price = float(price_val) if price_val else product.sell_price
+            except (ValueError, TypeError):
                 errors.append(f"Row {row_num}: Invalid quantity or price format")
                 continue
                 
@@ -124,7 +127,8 @@ def upload_sales():
                 errors.append(f"Row {row_num}: Insufficient stock for {product.name}")
                 continue
                 
-            sale_date_str = row.get('sale_date', '').strip()
+            sale_date_val = row.get('sale_date')
+            sale_date_str = str(sale_date_val).strip() if sale_date_val else ''
             if sale_date_str:
                 try:
                     sale_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
@@ -138,7 +142,7 @@ def upload_sales():
                 product_id=product.id,
                 quantity=qty,
                 unit_price=unit_price,
-                total_amount=qty * unit_price,
+                total_amount=round(qty * unit_price, 2),
                 sale_date=sale_date,
                 note=row.get('note', '')
             )
