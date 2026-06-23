@@ -69,6 +69,15 @@ class Sale(db.Model):
     note = db.Column(db.String(255), default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note=''):
+        self.product_id = product_id
+        self.quantity = quantity
+        self.unit_price = unit_price
+        self.total_amount = total_amount
+        if sale_date is not None:
+            self.sale_date = sale_date
+        self.note = note
+
     def to_dict(self):
         return {
             'id': self.id,

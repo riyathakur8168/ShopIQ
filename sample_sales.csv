@@ -1,0 +1,4 @@
+product_id,product_name,quantity,unit_price,sale_date,note
+1,,2,15.50,2023-10-15,Walk-in customer
+,Sample Product,1,,2023-10-16,Price defaults to current sell price
+2,,5,10.00,,Date defaults to today

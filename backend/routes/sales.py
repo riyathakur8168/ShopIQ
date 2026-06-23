@@ -20,9 +20,15 @@ def get_sales():
 
     query = Sale.query
     if start_date:
-        query = query.filter(Sale.sale_date >= datetime.strptime(start_date, '%Y-%m-%d').date())
+        try:
+            query = query.filter(Sale.sale_date >= datetime.strptime(start_date, '%Y-%m-%d').date())
+        except ValueError:
+            return jsonify({'message': 'Invalid start_date format, expected YYYY-MM-DD'}), 400
     if end_date:
-        query = query.filter(Sale.sale_date <= datetime.strptime(end_date, '%Y-%m-%d').date())
+        try:
+            query = query.filter(Sale.sale_date <= datetime.strptime(end_date, '%Y-%m-%d').date())
+        except ValueError:
+            return jsonify({'message': 'Invalid end_date format, expected YYYY-MM-DD'}), 400
     if product_id:
         query = query.filter(Sale.product_id == product_id)
 
@@ -44,20 +50,37 @@ def add_sale():
         if not data or not all(k in data for k in required):
             return jsonify({'message': 'Missing required fields'}), 400
 
-        product = Product.query.get(int(data['product_id']))
+        try:
+            product_id = int(data['product_id'])
+        except (ValueError, TypeError):
+            return jsonify({'message': 'Invalid product_id format'}), 400
+
+        product = Product.query.get(product_id)
         if not product:
             return jsonify({'message': 'Product not found'}), 404
 
-        qty = int(data['quantity'])
+        try:
+            qty = int(data['quantity'])
+            unit_price = float(data['unit_price'])
+        except (ValueError, TypeError):
+            return jsonify({'message': 'Invalid quantity or unit_price format'}), 400
+
+        if qty <= 0:
+            return jsonify({'message': 'Quantity must be greater than zero'}), 400
+        if unit_price < 0:
+            return jsonify({'message': 'Unit price cannot be negative'}), 400
+
         if product.stock_quantity < qty:
             return jsonify({'message': f'Insufficient stock. Available: {product.stock_quantity}'}), 400
 
-        unit_price = float(data['unit_price'])
-        total = qty * unit_price
+        total = round(qty * unit_price, 2)
 
         sale_date_str = data.get('sale_date')
         if sale_date_str:
-            s_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
+            try:
+                s_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'message': 'Invalid sale_date format, expected YYYY-MM-DD'}), 400
         else:
             s_date = date.today()
 
@@ -96,7 +119,11 @@ def upload_sales():
         return jsonify({'message': 'Invalid file format. Please upload a CSV file.'}), 400
 
     try:
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        try:
+            stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        except UnicodeDecodeError:
+            return jsonify({'message': 'Invalid file encoding. Please upload a UTF-8 encoded CSV file.'}), 400
+            
         csv_reader = csv.DictReader(stream)
         
         success_count = 0
@@ -104,10 +131,14 @@ def upload_sales():
         
         for row_num, row in enumerate(csv_reader, start=2):
             product = None
-            if row.get('product_id') and str(row.get('product_id')).strip():
-                product = Product.query.get(int(row['product_id']))
-            elif row.get('product_name') and str(row.get('product_name')).strip():
-                product = Product.query.filter(func.lower(Product.name) == func.lower(row['product_name'].strip())).first()
+            try:
+                if row.get('product_id') and str(row.get('product_id')).strip():
+                    product = Product.query.get(int(row['product_id']))
+                elif row.get('product_name') and str(row.get('product_name')).strip():
+                    product = Product.query.filter(func.lower(Product.name) == func.lower(row['product_name'].strip())).first()
+            except (ValueError, TypeError):
+                errors.append(f"Row {row_num}: Invalid product_id format")
+                continue
                 
             if not product:
                 errors.append(f"Row {row_num}: Product not found")
@@ -121,6 +152,13 @@ def upload_sales():
                 unit_price = float(price_val) if price_val else product.sell_price
             except (ValueError, TypeError):
                 errors.append(f"Row {row_num}: Invalid quantity or price format")
+                continue
+                
+            if qty <= 0:
+                errors.append(f"Row {row_num}: Quantity must be greater than zero")
+                continue
+            if unit_price < 0:
+                errors.append(f"Row {row_num}: Unit price cannot be negative")
                 continue
                 
             if product.stock_quantity < qty:
@@ -166,72 +204,96 @@ def upload_sales():
             'errors': errors
         }), 201
 
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f'Server error: {str(e)}'}), 500
+
 
 @sales_bp.route('/<int:sale_id>', methods=['DELETE'])
 @jwt_required()
 def delete_sale(sale_id):
-    sale = Sale.query.get(sale_id)
-    if not sale:
-        return jsonify({'message': 'Sale not found'}), 404
-    # Restore stock
-    product = Product.query.get(sale.product_id)
-    if product:
-        product.stock_quantity += sale.quantity
-    db.session.delete(sale)
-    db.session.commit()
-    return jsonify({'message': 'Sale deleted'}), 200
+    try:
+        sale = Sale.query.get(sale_id)
+        if not sale:
+            return jsonify({'message': 'Sale not found'}), 404
+        # Restore stock
+        product = Product.query.get(sale.product_id)
+        if product:
+            product.stock_quantity += sale.quantity
+        db.session.delete(sale)
+        db.session.commit()
+        return jsonify({'message': 'Sale deleted'}), 200
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f'Server error: {str(e)}'}), 500
 
 
 @sales_bp.route('/analytics', methods=['GET'])
 @jwt_required()
 def get_analytics():
-    today = date.today()
-    week_ago = today - timedelta(days=6)
-    month_start = today.replace(day=1)
+    try:
+        today = date.today()
+        week_ago = today - timedelta(days=6)
+        month_start = today.replace(day=1)
 
-    # Today's stats
-    today_sales = db.session.query(
-        func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
-    ).filter(Sale.sale_date == today).first()
-
-    # Monthly stats
-    monthly_sales = db.session.query(
-        func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
-    ).filter(Sale.sale_date >= month_start).first()
-
-    # 7-day chart data
-    chart_data = []
-    for i in range(6, -1, -1):
-        d = today - timedelta(days=i)
-        row = db.session.query(
+        # Today's stats
+        today_sales = db.session.query(
             func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
-        ).filter(Sale.sale_date == d).first()
-        chart_data.append({
-            'day': d.strftime('%a'),
-            'date': d.strftime('%Y-%m-%d'),
-            'sales': int(row[0]),
-            'revenue': float(row[1])
-        })
+        ).filter(Sale.sale_date == today).first()
 
-    # Top products
-    top_products = db.session.query(
-        Product.name,
-        func.sum(Sale.quantity).label('total_qty'),
-        func.sum(Sale.total_amount).label('total_revenue')
-    ).join(Sale).group_by(Product.id).order_by(
-        func.sum(Sale.total_amount).desc()
-    ).limit(5).all()
+        # Monthly stats
+        monthly_sales = db.session.query(
+            func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
+        ).filter(Sale.sale_date >= month_start).first()
 
-    # Low stock count
-    low_stock_count = Product.query.filter(
-        Product.stock_quantity <= Product.low_stock_threshold
-    ).count()
+        # 7-day chart data
+        chart_data = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            row = db.session.query(
+                func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
+            ).filter(Sale.sale_date == d).first()
+            chart_data.append({
+                'day': d.strftime('%a'),
+                'date': d.strftime('%Y-%m-%d'),
+                'sales': int(row[0]),
+                'revenue': float(row[1])
+            })
 
-    return jsonify({
-        'today': {'count': int(today_sales[0]), 'revenue': float(today_sales[1])},
-        'monthly': {'count': int(monthly_sales[0]), 'revenue': float(monthly_sales[1])},
-        'chart_data': chart_data,
-        'top_products': [{'name': p[0], 'qty': int(p[1]), 'revenue': float(p[2])} for p in top_products],
-        'total_products': Product.query.count(),
-        'low_stock_count': low_stock_count
-    }), 200
+        # Top products
+        top_products = db.session.query(
+            Product.name,
+            func.sum(Sale.quantity).label('total_qty'),
+            func.sum(Sale.total_amount).label('total_revenue')
+        ).join(Sale).group_by(Product.id).order_by(
+            func.sum(Sale.total_amount).desc()
+        ).limit(5).all()
+
+        # Low stock count
+        low_stock_count = Product.query.filter(
+            Product.stock_quantity <= Product.low_stock_threshold
+        ).count()
+
+        # Revenue by Category
+        revenue_by_category = db.session.query(
+            Product.category,
+            func.sum(Sale.total_amount).label('total_revenue')
+        ).join(Sale).group_by(Product.category).all()
+
+        return jsonify({
+            'today': {'count': int(today_sales[0]), 'revenue': float(today_sales[1])},
+            'monthly': {'count': int(monthly_sales[0]), 'revenue': float(monthly_sales[1])},
+            'chart_data': chart_data,
+            'top_products': [{'name': p[0], 'qty': int(p[1]), 'revenue': float(p[2])} for p in top_products],
+            'category_data': [{'name': c[0] or 'General', 'value': float(c[1])} for c in revenue_by_category],
+            'total_products': Product.query.count(),
+            'low_stock_count': low_stock_count
+        }), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f'Server error: {str(e)}'}), 500
