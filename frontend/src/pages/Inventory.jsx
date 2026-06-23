@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getProducts, addProduct, updateProduct, deleteProduct } from '../services/api';
+import { useState, useEffect, useRef } from 'react';
+import { getProducts, addProduct, updateProduct, deleteProduct, uploadOCRImage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
 const EMPTY_FORM = { name: '', category: '', buy_price: '', sell_price: '', stock_quantity: '', low_stock_threshold: 10 };
@@ -124,25 +124,44 @@ function ProductsTab() {
         <div className="card p-6 animate-fade-in shadow-md border-primary-100 bg-primary-50/30">
           <h3 className="text-sm font-bold text-slate-900 mb-5">{editProduct ? 'Edit Product' : 'Add New Product'}</h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Product Name', key: 'name', type: 'text', placeholder: 'e.g. Amul Milk', span: 2 },
-              { label: 'Category', key: 'category', type: 'text', placeholder: 'e.g. Dairy' },
-              { label: 'Stock Qty', key: 'stock_quantity', type: 'number', placeholder: '50' },
-              { label: 'Low Stock Alert At', key: 'low_stock_threshold', type: 'number', placeholder: '10' },
-              { label: 'Buy Price (₹)', key: 'buy_price', type: 'number', placeholder: '52' },
-              { label: 'Sell Price (₹)', key: 'sell_price', type: 'number', placeholder: '60' },
-            ].map(f => (
-              <div key={f.key} className={f.span === 2 ? 'md:col-span-2' : ''}>
-                <label className="input-label">{f.label}</label>
-                <input required={!['low_stock_threshold'].includes(f.key)} type={f.type} value={form[f.key]} placeholder={f.placeholder}
-                  onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))} className="input bg-white border-slate-200" />
-              </div>
-            ))}
-            {form.buy_price && form.sell_price && (
+            <div className="md:col-span-2">
+              <label className="input-label">Product Name</label>
+              <input required type="text" value={form.name || ''} placeholder="e.g. Amul Milk"
+                onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} className="input bg-white border-slate-200" />
+            </div>
+            <div>
+              <label className="input-label">Category</label>
+              <input required type="text" value={form.category || ''} placeholder="e.g. Dairy"
+                onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))} className="input bg-white border-slate-200" />
+            </div>
+            <div>
+              <label className="input-label">Stock Qty</label>
+              <input required type="number" value={form.stock_quantity ?? ''} placeholder="50"
+                onChange={e => setForm(prev => ({ ...prev, stock_quantity: e.target.value }))} className="input bg-white border-slate-200" />
+            </div>
+            <div>
+              <label className="input-label">Low Stock Alert At</label>
+              <input type="number" value={form.low_stock_threshold ?? ''} placeholder="10"
+                onChange={e => setForm(prev => ({ ...prev, low_stock_threshold: e.target.value }))} className="input bg-white border-slate-200" />
+            </div>
+            <div></div> {/* Empty column spacer */}
+            <div>
+              <label className="input-label">Buy Price (₹)</label>
+              <input required type="number" value={form.buy_price ?? ''} placeholder="52"
+                onChange={e => setForm(prev => ({ ...prev, buy_price: e.target.value }))} className="input bg-white border-slate-200" />
+            </div>
+            <div>
+              <label className="input-label">Sell Price (₹)</label>
+              <input required type="number" value={form.sell_price ?? ''} placeholder="60"
+                onChange={e => setForm(prev => ({ ...prev, sell_price: e.target.value }))} className="input bg-white border-slate-200" />
+            </div>
+
+            {(Boolean(form.buy_price) && Boolean(form.sell_price) && Number(form.buy_price) > 0) ? (
               <div className="md:col-span-3 text-xs text-green-600 font-bold bg-green-50 p-2 rounded-lg border border-green-100">
-                Profit Margin: {((form.sell_price - form.buy_price) / form.buy_price * 100).toFixed(1)}%
+                Profit Margin: {((Number(form.sell_price) - Number(form.buy_price)) / Number(form.buy_price) * 100).toFixed(1)}%
               </div>
-            )}
+            ) : null}
+            
             <div className="md:col-span-3 flex gap-3 pt-2">
               <button type="submit" disabled={submitting} className="btn-primary">{submitting ? 'Saving...' : editProduct ? 'Update Product' : 'Add Product'}</button>
               <button type="button" onClick={() => { setShowForm(false); setEditProduct(null); }} className="btn-secondary">Cancel</button>
@@ -260,6 +279,113 @@ function StockTab() {
 }
 
 function OCRImportTab() {
+  const [loading, setLoading] = useState(false);
+  const [extractedItems, setExtractedItems] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+  const { toast } = useToast();
+
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      const res = await uploadOCRImage(file);
+      setExtractedItems(res.data.extracted_items || []);
+      toast('Image scanned successfully!', 'success');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to scan image', 'error');
+    } finally {
+      setLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirm = async () => {
+    setImporting(true);
+    let successCount = 0;
+    try {
+      for (const item of extractedItems) {
+        await addProduct(item);
+        successCount++;
+      }
+      toast(`Successfully imported ${successCount} products!`, 'success');
+      setExtractedItems([]);
+    } catch (err) {
+      toast(`Import stopped. Failed to add an item.`, 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  if (extractedItems.length > 0) {
+    return (
+      <div className="card p-6 animate-fade-in mt-4">
+        <h3 className="section-title mb-4">Review Scanned Items</h3>
+        <p className="text-sm text-slate-500 mb-6">Please review the extracted data. You can edit the values below before confirming the import.</p>
+        
+        <div className="table-container mb-6">
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className="table-header">Product Name</th>
+                <th className="table-header">Buy ₹</th>
+                <th className="table-header">Sell ₹</th>
+                <th className="table-header">Qty</th>
+                <th className="table-header"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {extractedItems.map((item, idx) => (
+                <tr key={idx} className="table-row">
+                  <td className="table-cell">
+                    <input type="text" className="input bg-white py-1" value={item.name} onChange={(e) => {
+                      const newItems = [...extractedItems];
+                      newItems[idx].name = e.target.value;
+                      setExtractedItems(newItems);
+                    }} />
+                  </td>
+                  <td className="table-cell">
+                    <input type="number" className="input bg-white w-20 py-1" value={item.buy_price} onChange={(e) => {
+                      const newItems = [...extractedItems];
+                      newItems[idx].buy_price = e.target.value;
+                      setExtractedItems(newItems);
+                    }} />
+                  </td>
+                  <td className="table-cell">
+                    <input type="number" className="input bg-white w-20 py-1" value={item.sell_price} onChange={(e) => {
+                      const newItems = [...extractedItems];
+                      newItems[idx].sell_price = e.target.value;
+                      setExtractedItems(newItems);
+                    }} />
+                  </td>
+                  <td className="table-cell">
+                    <input type="number" className="input bg-white w-20 py-1" value={item.stock_quantity} onChange={(e) => {
+                      const newItems = [...extractedItems];
+                      newItems[idx].stock_quantity = e.target.value;
+                      setExtractedItems(newItems);
+                    }} />
+                  </td>
+                  <td className="table-cell">
+                    <button onClick={() => setExtractedItems(extractedItems.filter((_, i) => i !== idx))} className="text-xs text-red-600 font-bold hover:underline">Remove</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-end gap-4">
+          <button onClick={() => setExtractedItems([])} className="btn-secondary" disabled={importing}>Cancel</button>
+          <button onClick={handleConfirm} className="btn-primary" disabled={importing}>
+            {importing ? 'Importing...' : 'Confirm & Import to Inventory'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card p-8 text-center animate-fade-in max-w-2xl mx-auto mt-8">
       <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -268,9 +394,23 @@ function OCRImportTab() {
       <h3 className="text-lg font-bold text-slate-900 mb-2">Automated Data Entry (OCR)</h3>
       <p className="text-sm text-slate-500 mb-6">Upload a photo of a vendor bill or stock register, and ShopIQ will extract the products and quantities automatically.</p>
       
-      <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 hover:border-primary-500 hover:bg-primary-50 transition-colors cursor-pointer group">
-        <p className="text-sm font-semibold text-slate-600 group-hover:text-primary-700">Click to capture or upload image</p>
-        <p className="text-xs text-slate-400 mt-2">Supports JPG, PNG (Max 10MB)</p>
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
+      
+      <div 
+        onClick={() => !loading && fileInputRef.current?.click()}
+        className={`border-2 border-dashed border-slate-300 rounded-2xl p-12 transition-colors ${loading ? 'bg-slate-50 opacity-50 cursor-wait' : 'hover:border-primary-500 hover:bg-primary-50 cursor-pointer group'}`}
+      >
+        {loading ? (
+          <div className="flex flex-col items-center justify-center">
+            <span className="spinner mb-4" />
+            <p className="text-sm font-semibold text-slate-600">Scanning document...</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-slate-600 group-hover:text-primary-700">Click to capture or upload image</p>
+            <p className="text-xs text-slate-400 mt-2">Supports JPG, PNG (Max 10MB)</p>
+          </>
+        )}
       </div>
     </div>
   );

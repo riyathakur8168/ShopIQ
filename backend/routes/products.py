@@ -58,3 +58,42 @@ def delete_product(product_id):
     db.session.delete(product)
     db.session.commit()
     return jsonify({'message': 'Product deleted successfully'}), 200
+
+@products_bp.route('/ocr-upload', methods=['POST'])
+@jwt_required()
+def ocr_upload():
+    if 'file' not in request.files:
+        return jsonify({'message': 'No image file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'message': 'No selected image file'}), 400
+
+    import time
+    import random
+    
+    # Simulate scanning delay (2 seconds)
+    time.sleep(2)
+    
+    # Simulate parsed products from the "bill"
+    mock_items = [
+        {
+            'name': 'Scanned Item ' + str(random.randint(100, 999)),
+            'category': 'General',
+            'buy_price': random.randint(10, 50),
+            'sell_price': random.randint(60, 100),
+            'stock_quantity': random.randint(10, 100)
+        },
+        {
+            'name': 'Scanned Item ' + str(random.randint(100, 999)),
+            'category': 'General',
+            'buy_price': random.randint(20, 40),
+            'sell_price': random.randint(50, 80),
+            'stock_quantity': random.randint(5, 50)
+        }
+    ]
+    
+    return jsonify({
+        'message': 'Image scanned successfully',
+        'extracted_items': mock_items
+    }), 200

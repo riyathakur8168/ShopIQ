@@ -31,6 +31,13 @@ export const getProducts = () => API.get('/products/');
 export const addProduct = (data) => API.post('/products/', data);
 export const updateProduct = (id, data) => API.put(`/products/${id}`, data);
 export const deleteProduct = (id) => API.delete(`/products/${id}`);
+export const uploadOCRImage = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return API.post('/products/ocr-upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
 
 // Sales
 export const getSales = (params) => API.get('/sales/', { params });

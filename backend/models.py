@@ -37,7 +37,7 @@ class Product(db.Model):
     stock_quantity = db.Column(db.Integer, default=0)
     low_stock_threshold = db.Column(db.Integer, default=10)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    sales = db.relationship('Sale', backref='product', lazy=True)
+    sales = db.relationship('Sale', backref='product', lazy=True, cascade="all, delete-orphan")
 
     def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10):
         self.name = name
@@ -100,7 +100,7 @@ class Customer(db.Model):
     total_credit = db.Column(db.Float, default=0)
     total_paid = db.Column(db.Float, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    credit_records = db.relationship('CreditRecord', backref='customer', lazy=True)
+    credit_records = db.relationship('CreditRecord', backref='customer', lazy=True, cascade="all, delete-orphan")
 
     @property
     def balance(self):
