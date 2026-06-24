@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
-from models import Product
+from models import Product, Sale
 from flask_jwt_extended import jwt_required
 
 products_bp = Blueprint('products', __name__, url_prefix='/api/products')
@@ -10,6 +10,51 @@ products_bp = Blueprint('products', __name__, url_prefix='/api/products')
 def get_products():
     products = Product.query.all()
     return jsonify([product.to_dict() for product in products]), 200
+
+
+@products_bp.route('/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    products = Product.query.filter(Product.stock_quantity <= Product.low_stock_threshold).all()
+    notifications = []
+    for p in products:
+        if p.stock_quantity == 0:
+            prio = 1
+            status_label = "Out of Stock"
+            alert_type = "out_of_stock"
+            msg = f"{p.name} is completely out of stock."
+        elif p.stock_quantity <= p.low_stock_threshold / 2:
+            prio = 2
+            status_label = "Critical Stock"
+            alert_type = "critical_stock"
+            msg = f"{p.name} stock is critically low."
+        else:
+            prio = 3
+            status_label = "Low Stock"
+            alert_type = "low_stock"
+            msg = f"{p.name} is running low on stock."
+
+        recommended_reorder = max(p.low_stock_threshold * 2 - p.stock_quantity, 10)
+        last_sale = Sale.query.filter(Sale.product_id == p.id).order_by(Sale.sale_date.desc()).first()
+        alert_time = last_sale.sale_date.strftime('%Y-%m-%d') if last_sale else p.created_at.strftime('%Y-%m-%d')
+
+        notifications.append({
+            'product_id': p.id,
+            'product_name': p.name,
+            'current_stock': p.stock_quantity,
+            'low_stock_threshold': p.low_stock_threshold,
+            'recommended_reorder': recommended_reorder,
+            'priority': prio,
+            'status_label': status_label,
+            'alert_type': alert_type,
+            'message': msg,
+            'timestamp': alert_time
+        })
+    notifications.sort(key=lambda x: (x['priority'], x['current_stock']))
+    return jsonify({
+        'notifications': notifications,
+        'count': len(notifications)
+    }), 200
 
 @products_bp.route('/', methods=['POST'])
 @jwt_required()

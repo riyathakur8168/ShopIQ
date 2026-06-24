@@ -31,6 +31,7 @@ export const getProducts = () => API.get('/products/');
 export const addProduct = (data) => API.post('/products/', data);
 export const updateProduct = (id, data) => API.put(`/products/${id}`, data);
 export const deleteProduct = (id) => API.delete(`/products/${id}`);
+export const getInventoryNotifications = () => API.get('/products/notifications');
 export const uploadOCRImage = (file) => {
   const formData = new FormData();
   formData.append('file', file);

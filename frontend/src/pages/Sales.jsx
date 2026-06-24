@@ -169,6 +169,7 @@ function SalesEntryTab() {
       toast(`Successfully completed sale of ${successCount} items!`, 'success');
       setCart([]);
       load();
+      window.dispatchEvent(new Event('update-notifications'));
     } catch (err) {
       toast(err.response?.data?.message || 'Error processing some items in the cart', 'error');
       load();
@@ -382,6 +383,7 @@ function CSVUploadTab({ recentUploads, setRecentUploads, setActiveTab }) {
       setRecentUploads(prev => [{ name: file.name, date: new Date().toLocaleString(), success: res.data.success_count }, ...prev]);
       setFile(null);
       setActiveTab('Analytics');
+      window.dispatchEvent(new Event('update-notifications'));
     } catch (err) {
       toast(err.response?.data?.message || 'Upload failed', 'error');
       if (err.response?.data?.errors && err.response.data.errors.length > 0) {

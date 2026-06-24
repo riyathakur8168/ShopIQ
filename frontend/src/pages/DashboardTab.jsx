@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getSalesAnalytics } from '../services/api';
+import { getSalesAnalytics, getInventoryNotifications } from '../services/api';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell
@@ -23,9 +23,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function DashboardTab({ setActiveTab }) {
   const [data, setData] = useState(null);
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     getSalesAnalytics().then(res => setData(res.data)).catch(() => {});
+    getInventoryNotifications().then(res => setNotifications(res.data.notifications || [])).catch(() => {});
   }, []);
 
   if (!data) return (
@@ -123,26 +125,48 @@ export default function DashboardTab({ setActiveTab }) {
         <div className="card">
           <div className="section-header">
             <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              <span className={`w-2 h-2 rounded-full ${notifications.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></span>
               Low Stock Alerts
             </h3>
             <button onClick={() => setActiveTab('Inventory')} className="text-xs font-semibold text-primary-600 hover:text-primary-700">View All</button>
           </div>
-          <div className="p-4 space-y-3">
-            {[
-              { name: 'Aashirvaad Atta 5kg', stock: 2, status: 'Critical' },
-              { name: 'Tata Salt 1kg', stock: 5, status: 'Low' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                  <p className="text-xs text-red-600 mt-0.5">{item.stock} left in stock</p>
-                </div>
-                <button onClick={() => setActiveTab('Inventory')} className="text-xs font-semibold bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
-                  Reorder
-                </button>
+          <div className="p-4 space-y-3 max-h-[320px] overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm font-medium">
+                ✅ All stock levels are healthy!
               </div>
-            ))}
+            ) : (
+              notifications.map((item) => (
+                <div key={item.product_id} className={`flex items-center justify-between p-3 rounded-lg border ${
+                  item.priority === 1 
+                    ? 'bg-red-50 border-red-100 text-red-900' 
+                    : (item.priority === 2 ? 'bg-orange-50 border-orange-100 text-orange-900' : 'bg-amber-50 border-amber-100 text-amber-900')
+                }`}>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{item.product_name}</p>
+                    <p className={`text-xs mt-0.5 font-semibold ${
+                      item.priority === 1 ? 'text-red-600' : (item.priority === 2 ? 'text-orange-600' : 'text-amber-600')
+                    }`}>
+                      {item.current_stock === 0 ? 'Out of Stock' : `${item.current_stock} left in stock`}
+                      <span className="text-slate-400 font-normal ml-2">({item.status_label})</span>
+                    </p>
+                    {item.recommended_reorder && (
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Recommended Reorder: <strong className="text-slate-700">{item.recommended_reorder} units</strong>
+                      </p>
+                    )}
+                    <p className="text-[9px] text-slate-400 mt-0.5">Alert Date: {item.timestamp}</p>
+                  </div>
+                  <button onClick={() => setActiveTab('Inventory')} className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors bg-white border ${
+                    item.priority === 1 
+                      ? 'border-red-200 text-red-600 hover:bg-red-50' 
+                      : (item.priority === 2 ? 'border-orange-200 text-orange-600 hover:bg-orange-50' : 'border-amber-200 text-amber-600 hover:bg-amber-50')
+                  }`}>
+                    Reorder
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

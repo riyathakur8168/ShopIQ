@@ -93,6 +93,7 @@ function ProductsTab() {
       }
       setShowForm(false); setEditProduct(null); setForm(EMPTY_FORM);
       load();
+      window.dispatchEvent(new Event('update-notifications'));
     } catch (err) {
       toast(err.response?.data?.message || 'Failed to save product', 'error');
     } finally { setSubmitting(false); }
@@ -100,7 +101,12 @@ function ProductsTab() {
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this product?')) return;
-    try { await deleteProduct(id); toast('Product deleted', 'success'); load(); }
+    try { 
+      await deleteProduct(id); 
+      toast('Product deleted', 'success'); 
+      load(); 
+      window.dispatchEvent(new Event('update-notifications'));
+    }
     catch { toast('Failed to delete', 'error'); }
   };
 
@@ -312,6 +318,7 @@ function OCRImportTab() {
       }
       toast(`Successfully imported ${successCount} products!`, 'success');
       setExtractedItems([]);
+      window.dispatchEvent(new Event('update-notifications'));
     } catch (err) {
       toast(`Import stopped. Failed to add an item.`, 'error');
     } finally {
