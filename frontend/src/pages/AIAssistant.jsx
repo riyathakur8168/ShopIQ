@@ -26,9 +26,9 @@ export default function AIAssistant() {
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    getSalesAnalytics().then(r => setAnalytics(r.data)).catch(() => {});
-    getProducts().then(r => setProducts(r.data)).catch(() => {});
-    getCustomers().then(r => setCustomers(r.data)).catch(() => {});
+    getSalesAnalytics().then(r => setAnalytics(r.data)).catch(err => console.error(err));
+    getProducts().then(r => setProducts(r.data)).catch(err => console.error(err));
+    getCustomers().then(r => setCustomers(r.data)).catch(err => console.error(err));
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);
@@ -79,10 +79,24 @@ export default function AIAssistant() {
     return "I can answer questions about your **sales, inventory, udhar**, and more. Try asking:\n\n• What's my best-selling product?\n• Which products need reorder?\n• How were sales this week?\n• Who has pending udhar?";
   };
 
+  /**
+   * SEC-4: Safe text renderer — converts **bold** markers to <strong> React elements
+   * WITHOUT using dangerouslySetInnerHTML. User input is never treated as HTML.
+   */
   const renderText = (text) => {
-    return text.split('\n').map((line, i) => {
-      const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>');
-      return <p key={i} className="mb-1 last:mb-0" dangerouslySetInnerHTML={{ __html: bold || '&nbsp;' }} />;
+    return text.split('\n').map((line, lineIdx) => {
+      // Split on **...** pattern and alternate between plain and bold
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      const nodes = parts.map((part, i) =>
+        i % 2 === 1
+          ? <strong key={i} className="font-bold text-slate-900">{part}</strong>
+          : part
+      );
+      return (
+        <p key={lineIdx} className="mb-1 last:mb-0">
+          {nodes.length > 0 ? nodes : <>&nbsp;</>}
+        </p>
+      );
     });
   };
 

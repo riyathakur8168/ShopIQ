@@ -1,11 +1,17 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
-from models import Sale, Product
+from models import Sale, Product, SystemState, Customer
 from flask_jwt_extended import jwt_required
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 import csv
 import io
+import traceback
+import time
+
+analytics_cache = {}
+CACHE_TTL = 60
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/api/sales')
 
@@ -18,7 +24,7 @@ def get_sales():
     end_date = request.args.get('end_date')
     product_id = request.args.get('product_id', type=int)
 
-    query = Sale.query
+    query = Sale.query.options(joinedload(Sale.product))
     if start_date:
         try:
             query = query.filter(Sale.sale_date >= datetime.strptime(start_date, '%Y-%m-%d').date())
@@ -32,7 +38,7 @@ def get_sales():
     if product_id:
         query = query.filter(Sale.product_id == product_id)
 
-    sales = query.order_by(Sale.sale_date.desc(), Sale.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    sales = query.order_by(Sale.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
     return jsonify({
         'sales': [s.to_dict() for s in sales.items],
         'total': sales.total,
@@ -55,7 +61,7 @@ def add_sale():
         except (ValueError, TypeError):
             return jsonify({'message': 'Invalid product_id format'}), 400
 
-        product = Product.query.get(product_id)
+        product = db.session.query(Product).with_for_update().filter_by(id=product_id).first()
         if not product:
             return jsonify({'message': 'Product not found'}), 404
 
@@ -98,21 +104,22 @@ def add_sale():
         db.session.add(sale)
         db.session.commit()
         
+        analytics_cache.clear()
+        
         # Append manual sales notice to last uploaded file if applicable
         try:
-            import os
-            filename_path = 'last_uploaded_filename.txt'
-            if os.path.exists(filename_path):
-                with open(filename_path, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
+            state = SystemState.query.filter_by(key='last_uploaded_filename').first()
+            if state:
+                content = state.value.strip()
                 if content and not content.endswith('(with manual sales)') and content not in ['Active Catalog', 'No sales recorded yet']:
-                    with open(filename_path, 'w', encoding='utf-8') as f:
-                        f.write(f"{content} (with manual sales)")
+                    state.value = f"{content} (with manual sales)"
+                    db.session.commit()
             else:
-                with open(filename_path, 'w', encoding='utf-8') as f:
-                    f.write("Active Catalog")
+                new_state = SystemState(key='last_uploaded_filename', value='Active Catalog')
+                db.session.add(new_state)
+                db.session.commit()
         except Exception:
-            pass
+            db.session.rollback()
 
         return jsonify({'message': 'Sale recorded', 'sale': sale.to_dict()}), 201
     except Exception as e:
@@ -161,9 +168,9 @@ def upload_sales():
             product = None
             try:
                 if row.get('product_id') and str(row.get('product_id')).strip():
-                    product = Product.query.get(int(row['product_id']))
+                    product = db.session.query(Product).with_for_update().filter_by(id=int(row['product_id'])).first()
                 elif row.get('product_name') and str(row.get('product_name')).strip():
-                    product = Product.query.filter(func.lower(Product.name) == func.lower(row['product_name'].strip())).first()
+                    product = db.session.query(Product).with_for_update().filter(func.lower(Product.name) == func.lower(row['product_name'].strip())).first()
             except (ValueError, TypeError):
                 errors.append(f"Row {row_num}: Invalid product_id format")
                 continue
@@ -219,13 +226,20 @@ def upload_sales():
             success_count += 1
             
         db.session.commit()
+        analytics_cache.clear()
         
         # Save the name of the last successfully uploaded CSV file
         if success_count > 0:
             try:
-                with open('last_uploaded_filename.txt', 'w', encoding='utf-8') as f:
-                    f.write(file.filename)
+                state = SystemState.query.filter_by(key='last_uploaded_filename').first()
+                if state:
+                    state.value = file.filename
+                else:
+                    state = SystemState(key='last_uploaded_filename', value=file.filename)
+                    db.session.add(state)
+                db.session.commit()
             except Exception as e:
+                db.session.rollback()
                 print("Failed to save last uploaded filename:", str(e))
         
         if errors and success_count == 0:
@@ -261,6 +275,7 @@ def delete_sale(sale_id):
             product.stock_quantity += sale.quantity
         db.session.delete(sale)
         db.session.commit()
+        analytics_cache.clear()
         return jsonify({'message': 'Sale deleted'}), 200
     except Exception as e:
         db.session.rollback()
@@ -273,6 +288,12 @@ def delete_sale(sale_id):
 @jwt_required()
 def get_analytics():
     try:
+        source = request.args.get('source', '')
+        cache_key = f"analytics_{source}"
+        now = time.time()
+        if cache_key in analytics_cache and now - analytics_cache[cache_key]['timestamp'] < CACHE_TTL:
+            return jsonify(analytics_cache[cache_key]['data']), 200
+
         today = date.today()
         
         # Get target source parameter
@@ -281,10 +302,9 @@ def get_analytics():
         # Retrieve the last uploaded CSV filename from metadata
         last_filename = "Active Catalog"
         try:
-            import os
-            if os.path.exists('last_uploaded_filename.txt'):
-                with open('last_uploaded_filename.txt', 'r', encoding='utf-8') as f:
-                    last_filename = f.read().strip()
+            state = SystemState.query.filter_by(key='last_uploaded_filename').first()
+            if state:
+                last_filename = state.value.strip()
         except Exception:
             pass
 
@@ -482,9 +502,15 @@ def get_analytics():
         if sales_count == 0:
             last_filename = "No sales recorded yet"
 
-        return jsonify({
+        customers = Customer.query.all()
+        pending_customers = [c for c in customers if c.balance > 0]
+        udhar_total = sum(c.balance for c in pending_customers)
+        udhar_count = len(pending_customers)
+
+        response_data = {
             'today': {'count': int(today_sales[0]), 'revenue': float(today_sales[1])},
             'monthly': {'count': int(monthly_sales[0]), 'revenue': float(monthly_sales[1])},
+            'udhar': {'total_pending': udhar_total, 'customer_count': udhar_count},
             'chart_data': chart_data,
             'top_products': [{'name': p[0], 'qty': int(p[1]), 'revenue': float(p[2])} for p in top_products],
             'category_data': category_data,
@@ -493,7 +519,6 @@ def get_analytics():
             'last_uploaded_file': last_filename,
             'uploaded_files': uploaded_files,
             'current_source': source,
-            # New metrics returned:
             'sales_volume_by_product': sales_volume_by_product,
             'top_selling_product': top_selling_data,
             'highest_revenue_product': highest_revenue_product,
@@ -501,8 +526,10 @@ def get_analytics():
             'total_qty_sold': total_qty_sold,
             'total_revenue': total_revenue,
             'total_orders': total_orders
-        }), 200
+        }
+        
+        analytics_cache[cache_key] = {'data': response_data, 'timestamp': now}
+        return jsonify(response_data), 200
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify({'message': f'Server error: {str(e)}'}), 500

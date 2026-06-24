@@ -10,10 +10,25 @@ customers_bp = Blueprint('customers', __name__, url_prefix='/api/customers')
 @jwt_required()
 def get_customers():
     search = request.args.get('search', '')
+    page = request.args.get('page', type=int)
+    per_page = request.args.get('per_page', type=int)
+    
     query = Customer.query
     if search:
-        query = query.filter(Customer.name.ilike(f'%{search}%'))
-    customers = query.order_by(Customer.created_at.desc()).all()
+        # SEC-3: Escape LIKE metacharacters to prevent pattern injection
+        safe_search = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        query = query.filter(Customer.name.ilike(f'%{safe_search}%', escape='\\'))
+    query = query.order_by(Customer.created_at.desc())
+    
+    if page and per_page:
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        return jsonify({
+            'items': [c.to_dict() for c in paginated.items],
+            'total': paginated.total,
+            'pages': paginated.pages
+        }), 200
+        
+    customers = query.limit(1000).all()
     return jsonify([c.to_dict() for c in customers]), 200
 
 

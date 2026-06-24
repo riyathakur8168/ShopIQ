@@ -45,17 +45,29 @@ function DirectoryTab() {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', address: '' });
-  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const { toast } = useToast();
 
   const load = async () => {
     setLoading(true);
-    try { setCustomers((await getCustomers({ search })).data); }
+    try { 
+      const res = await getCustomers({ search, page, per_page: 20 });
+      if (res.data.items) {
+        setCustomers(res.data.items);
+        setTotalPages(res.data.pages);
+      } else {
+        setCustomers(res.data);
+      }
+    }
     catch { toast('Failed to load customers', 'error'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => { 
+    const timer = setTimeout(() => { load(); }, 300);
+    return () => clearTimeout(timer);
+  }, [search, page]);
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
@@ -97,7 +109,7 @@ function DirectoryTab() {
       <div className="table-container shadow-sm">
         <div className="section-header bg-slate-50 flex justify-between items-center py-2 px-4">
           <h3 className="section-title mb-0">All Customers ({customers.length})</h3>
-          <input className="input max-w-[200px] py-1.5 text-xs border-slate-200 bg-white" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="input max-w-[200px] py-1.5 text-xs border-slate-200 bg-white" placeholder="Search customers..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
         {loading ? <div className="flex items-center justify-center h-40"><span className="spinner" /></div> : (
           <table className="w-full">
@@ -139,6 +151,26 @@ function DirectoryTab() {
           </table>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm mt-4">
+          <button 
+            disabled={page === 1} 
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="btn-secondary disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm font-semibold text-slate-600">Page {page} of {totalPages}</span>
+          <button 
+            disabled={page === totalPages} 
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="btn-secondary disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -149,7 +181,8 @@ function CreditTab() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [txnForm, setTxnForm] = useState({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+  const [creditForm, setCreditForm] = useState({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
   const [search, setSearch] = useState('');
   const { toast } = useToast();
 
@@ -174,10 +207,10 @@ function CreditTab() {
   const handleCredit = async (e) => {
     e.preventDefault();
     try {
-      const res = await addCredit(selectedCustomer.id, txnForm);
+      const res = await addCredit(selectedCustomer.id, creditForm);
       toast('Credit added!', 'success');
       setSelectedCustomer(res.data.customer);
-      setTxnForm({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+      setCreditForm({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
       loadHistory(selectedCustomer.id); load();
     } catch (err) { toast(err.response?.data?.message || 'Failed', 'error'); }
   };
@@ -185,10 +218,10 @@ function CreditTab() {
   const handlePayment = async (e) => {
     e.preventDefault();
     try {
-      const res = await recordPayment(selectedCustomer.id, txnForm);
+      const res = await recordPayment(selectedCustomer.id, paymentForm);
       toast('Payment recorded!', 'success');
       setSelectedCustomer(res.data.customer);
-      setTxnForm({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+      setPaymentForm({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
       loadHistory(selectedCustomer.id); load();
     } catch (err) { toast(err.response?.data?.message || 'Failed', 'error'); }
   };
@@ -264,16 +297,16 @@ function CreditTab() {
                   <div>
                     <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">ADD CREDIT</p>
                     <form onSubmit={handleCredit} className="flex gap-2">
-                      <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" required value={txnForm.amount} placeholder="₹ Amount"
-                        onChange={e => setTxnForm(f => ({ ...f, amount: e.target.value }))} />
+                      <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" required value={creditForm.amount} placeholder="₹ Amount"
+                        onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} />
                       <button type="submit" className="btn bg-red-600 text-white hover:bg-red-700 text-sm font-bold shadow-sm">Add</button>
                     </form>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">RECORD PAYMENT</p>
                     <form onSubmit={handlePayment} className="flex gap-2">
-                      <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" required value={txnForm.amount} placeholder="₹ Amount"
-                        onChange={e => setTxnForm(f => ({ ...f, amount: e.target.value }))} />
+                      <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" required value={paymentForm.amount} placeholder="₹ Amount"
+                        onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} />
                       <button type="submit" className="btn bg-green-600 text-white hover:bg-green-700 text-sm font-bold shadow-sm">Pay</button>
                     </form>
                   </div>
@@ -326,8 +359,8 @@ function BillingTab() {
   const { toast } = useToast();
 
   useEffect(() => {
-    getProducts().then(r => setProducts(r.data)).catch(() => {});
-    getInvoices().then(r => setInvoices(r.data)).catch(() => {});
+    getProducts().then(r => setProducts(r.data)).catch(err => console.error(err));
+    getInvoices().then(r => setInvoices(r.data)).catch(err => console.error(err));
   }, []);
 
   const addItem = () => setItems(prev => [...prev, { product_id: '', name: '', qty: 1, price: 0 }]);

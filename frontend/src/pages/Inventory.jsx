@@ -54,23 +54,29 @@ function ProductsTab() {
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
 
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await getProducts();
-      setProducts(res.data);
+      const res = await getProducts({ page, per_page: 20, search, category: catFilter });
+      if (res.data.items) {
+        setFiltered(res.data.items);
+        setProducts(res.data.items);
+        setTotalPages(res.data.pages);
+      } else {
+        setFiltered(res.data);
+        setProducts(res.data);
+      }
     } catch { toast('Failed to load products', 'error'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
-
   useEffect(() => {
-    let list = products;
-    if (search) list = list.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
-    if (catFilter !== 'All') list = list.filter(p => p.category === catFilter);
-    setFiltered(list);
-  }, [products, search, catFilter]);
+    const timer = setTimeout(() => { load(); }, 300);
+    return () => clearTimeout(timer);
+  }, [page, search, catFilter]);
 
   const categories = ['All', ...new Set(products.map(p => p.category).filter(Boolean))];
 
@@ -178,10 +184,10 @@ function ProductsTab() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <input className="input max-w-xs border-slate-200" placeholder="🔍 Search products..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="input max-w-xs border-slate-200" placeholder="🔍 Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         <div className="flex gap-2">
           {categories.map(c => (
-            <button key={c} onClick={() => setCatFilter(c)}
+            <button key={c} onClick={() => { setCatFilter(c); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${catFilter === c ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:text-slate-900 border border-slate-200'}`}>
               {c}
             </button>
@@ -223,6 +229,26 @@ function ProductsTab() {
           </table>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm mt-4">
+          <button 
+            disabled={page === 1} 
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="btn-secondary disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm font-semibold text-slate-600">Page {page} of {totalPages}</span>
+          <button 
+            disabled={page === totalPages} 
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="btn-secondary disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

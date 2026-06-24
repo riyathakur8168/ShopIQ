@@ -8,7 +8,29 @@ products_bp = Blueprint('products', __name__, url_prefix='/api/products')
 @products_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_products():
-    products = Product.query.all()
+    page = request.args.get('page', type=int)
+    per_page = request.args.get('per_page', type=int)
+    search = request.args.get('search', '')
+    category = request.args.get('category', '')
+    
+    query = Product.query
+    if search:
+        safe_search = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        query = query.filter(Product.name.ilike(f'%{safe_search}%', escape='\\'))
+    if category and category != 'All':
+        query = query.filter(Product.category == category)
+        
+    query = query.order_by(Product.id.desc())
+
+    if page and per_page:
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        return jsonify({
+            'items': [p.to_dict() for p in paginated.items],
+            'total': paginated.total,
+            'pages': paginated.pages
+        }), 200
+        
+    products = query.limit(1000).all()
     return jsonify([product.to_dict() for product in products]), 200
 
 
@@ -116,9 +138,7 @@ def ocr_upload():
 
     import time
     import random
-    
-    # Simulate scanning delay (2 seconds)
-    time.sleep(2)
+
     
     # Simulate parsed products from the "bill"
     mock_items = [

@@ -1,6 +1,9 @@
-Flask
-Flask-SQLAlchemy
-Flask-JWT-Extended
-Flask-Cors
-gunicorn
-psycopg2-binary
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-JWT-Extended==4.6.0
+Flask-Cors==4.0.1
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+# Rate limiting (optional — for multi-worker deployments, configure with Redis backend)
+# flask-limiter==3.5.0
+werkzeug==3.0.3

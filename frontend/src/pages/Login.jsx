@@ -15,6 +15,21 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    // SEC-6: Client-side password validation (server always re-validates)
+    if (mode === 'signup') {
+      if (form.password.length < 8) {
+        toast('Password must be at least 8 characters long.', 'error');
+        setLoading(false);
+        return;
+      }
+      if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+        toast('Password must contain at least one letter and one number.', 'error');
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       if (mode === 'signup') {
         await api.signup({ name: form.name, email: form.email, password: form.password });
@@ -79,6 +94,11 @@ export default function Login() {
               <label className="input-label">Password</label>
               <input className="input" type="password" required placeholder="••••••••"
                 value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+              {mode === 'signup' && (
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Min. 8 characters · must contain a letter and a number
+                </p>
+              )}
             </div>
 
             <button type="submit" disabled={loading}

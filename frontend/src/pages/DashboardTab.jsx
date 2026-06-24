@@ -26,8 +26,8 @@ export default function DashboardTab({ setActiveTab }) {
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
-    getSalesAnalytics().then(res => setData(res.data)).catch(() => {});
-    getInventoryNotifications().then(res => setNotifications(res.data.notifications || [])).catch(() => {});
+    getSalesAnalytics().then(res => setData(res.data)).catch(err => console.error(err));
+    getInventoryNotifications().then(res => setNotifications(res.data.notifications || [])).catch(err => console.error(err));
   }, []);
 
   if (!data) return (
@@ -54,8 +54,8 @@ export default function DashboardTab({ setActiveTab }) {
         {[
           { label: "Today's Revenue", value: `₹${data.today?.revenue?.toLocaleString() || 0}`, sub: `${data.today?.count || 0} sales`, color: 'text-green-600' },
           { label: 'Monthly Revenue', value: `₹${data.monthly?.revenue?.toLocaleString() || 0}`, sub: `${data.monthly?.count || 0} sales`, color: 'text-primary-600' },
-          { label: 'Total Products',   value: '124', sub: 'In catalog', color: 'text-indigo-600' },
-          { label: 'Pending Udhar',       value: '₹3,200', sub: 'From 4 customers', color: 'text-orange-600' },
+          { label: 'Total Products',   value: data.total_products?.toString() || '0', sub: 'In catalog', color: 'text-indigo-600' },
+          { label: 'Pending Udhar',       value: `₹${data.udhar?.total_pending?.toLocaleString() || 0}`, sub: `From ${data.udhar?.customer_count || 0} customers`, color: 'text-orange-600' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{s.label}</p>

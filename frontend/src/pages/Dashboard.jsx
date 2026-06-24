@@ -18,7 +18,7 @@ export default function Dashboard() {
   const loadNotifications = () => {
     getInventoryNotifications()
       .then(res => setNotifications(res.data.notifications || []))
-      .catch(() => {});
+      .catch(err => console.error(err));
   };
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function Dashboard() {
     const handleUpdate = () => loadNotifications();
     window.addEventListener('update-notifications', handleUpdate);
     return () => window.removeEventListener('update-notifications', handleUpdate);
-  }, [activeTab]);
+  }, []);
 
   const renderPage = () => {
     switch (activeTab) {

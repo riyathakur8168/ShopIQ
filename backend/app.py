@@ -9,7 +9,7 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     jwt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
+    cors.init_app(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})
 
     from routes.auth import auth_bp
     from routes.products import products_bp
@@ -25,7 +25,7 @@ def create_app(config_class=Config):
 
     @app.route('/')
     def index():
-        return {"message": "ShopIQ API v2.0 — Production Ready"}
+        return {'status': 'ok'}, 200
 
     with app.app_context():
         db.create_all()
@@ -64,9 +64,6 @@ def _seed_demo_data():
             Product('Sunflower Oil 1L', 'Food', 130, 155, 20, 5),
         ]
         db.session.add_all(products)
-        db.session.commit()
-
-        # Commiting initial products without random demo sales
         db.session.commit()
 
     if Customer.query.count() == 0:

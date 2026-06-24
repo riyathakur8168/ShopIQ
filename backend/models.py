@@ -1,5 +1,5 @@
 from extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
 
@@ -11,7 +11,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='owner')
     shop_name = db.Column(db.String(150), default='My Shop')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -36,7 +36,7 @@ class Product(db.Model):
     sell_price = db.Column(db.Float, nullable=False)
     stock_quantity = db.Column(db.Integer, default=0)
     low_stock_threshold = db.Column(db.Integer, default=10)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship('Sale', backref='product', lazy=True, cascade="all, delete-orphan")
 
     def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10):
@@ -65,10 +65,10 @@ class Sale(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
     total_amount = db.Column(db.Float, nullable=False)
-    sale_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    sale_date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     note = db.Column(db.String(255), default='')
     source_file = db.Column(db.String(150), default='POS', nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note='', source_file='POS'):
         self.product_id = product_id
@@ -89,6 +89,7 @@ class Sale(db.Model):
             'unit_price': self.unit_price,
             'total_amount': self.total_amount,
             'sale_date': self.sale_date.strftime('%Y-%m-%d') if self.sale_date else '',
+            'created_at': self.created_at.isoformat() + 'Z' if self.created_at else None,
             'note': self.note,
             'source_file': self.source_file
         }
@@ -102,7 +103,7 @@ class Customer(db.Model):
     address = db.Column(db.String(255), default='')
     total_credit = db.Column(db.Float, default=0)
     total_paid = db.Column(db.Float, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     credit_records = db.relationship('CreditRecord', backref='customer', lazy=True, cascade="all, delete-orphan")
 
     @property
@@ -127,8 +128,8 @@ class CreditRecord(db.Model):
     record_type = db.Column(db.String(10), nullable=False)  # 'credit' or 'payment'
     amount = db.Column(db.Float, nullable=False)
     note = db.Column(db.String(255), default='')
-    date = db.Column(db.Date, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -145,8 +146,8 @@ class Invoice(db.Model):
     customer_name = db.Column(db.String(100), nullable=False)
     items_json = db.Column(db.Text, nullable=False)  # JSON string of items
     total_amount = db.Column(db.Float, nullable=False)
-    invoice_date = db.Column(db.Date, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    invoice_date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     @property
     def items(self):
@@ -161,3 +162,8 @@ class Invoice(db.Model):
             'total_amount': self.total_amount,
             'invoice_date': self.invoice_date.strftime('%Y-%m-%d') if self.invoice_date else ''
         }
+
+class SystemState(db.Model):
+    __tablename__ = 'system_state'
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.Text, nullable=False)
