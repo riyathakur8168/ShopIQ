@@ -29,6 +29,17 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
+        # Schema migration check for sales table's source_file column
+        try:
+            db.session.execute(db.text("SELECT source_file FROM sales LIMIT 1"))
+        except Exception:
+            db.session.rollback()
+            try:
+                db.session.execute(db.text("ALTER TABLE sales ADD COLUMN source_file VARCHAR(150) DEFAULT 'POS'"))
+                db.session.commit()
+                print("Successfully migrated database: added source_file column to sales table.")
+            except Exception as e:
+                print("Failed to run database migration:", str(e))
         _seed_demo_data()
 
     return app
@@ -55,24 +66,7 @@ def _seed_demo_data():
         db.session.add_all(products)
         db.session.commit()
 
-        # Add demo sales for 7 days
-        today = date.today()
-        import random
-        all_products = Product.query.all()
-        for i in range(6, -1, -1):
-            d = today - timedelta(days=i)
-            for _ in range(random.randint(3, 8)):
-                p = random.choice(all_products)
-                qty = random.randint(1, 5)
-                if p.stock_quantity >= qty:
-                    sale = Sale(
-                        product_id=p.id, quantity=qty,
-                        unit_price=p.sell_price,
-                        total_amount=qty * p.sell_price,
-                        sale_date=d
-                    )
-                    p.stock_quantity -= qty
-                    db.session.add(sale)
+        # Commiting initial products without random demo sales
         db.session.commit()
 
     if Customer.query.count() == 0:

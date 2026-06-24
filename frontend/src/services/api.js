@@ -43,7 +43,7 @@ export const uploadOCRImage = (file) => {
 export const getSales = (params) => API.get('/sales/', { params });
 export const addSale = (data) => API.post('/sales/', data);
 export const deleteSale = (id) => API.delete(`/sales/${id}`);
-export const getSalesAnalytics = () => API.get('/sales/analytics');
+export const getSalesAnalytics = (params) => API.get('/sales/analytics', { params });
 export const uploadSalesCSV = (file) => {
   const formData = new FormData();
   formData.append('file', file);

@@ -67,9 +67,10 @@ class Sale(db.Model):
     total_amount = db.Column(db.Float, nullable=False)
     sale_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     note = db.Column(db.String(255), default='')
+    source_file = db.Column(db.String(150), default='POS', nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note=''):
+    def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note='', source_file='POS'):
         self.product_id = product_id
         self.quantity = quantity
         self.unit_price = unit_price
@@ -77,6 +78,7 @@ class Sale(db.Model):
         if sale_date is not None:
             self.sale_date = sale_date
         self.note = note
+        self.source_file = source_file
 
     def to_dict(self):
         return {
@@ -87,7 +89,8 @@ class Sale(db.Model):
             'unit_price': self.unit_price,
             'total_amount': self.total_amount,
             'sale_date': self.sale_date.strftime('%Y-%m-%d') if self.sale_date else '',
-            'note': self.note
+            'note': self.note,
+            'source_file': self.source_file
         }
 
 

@@ -97,6 +97,23 @@ def add_sale():
 
         db.session.add(sale)
         db.session.commit()
+        
+        # Append manual sales notice to last uploaded file if applicable
+        try:
+            import os
+            filename_path = 'last_uploaded_filename.txt'
+            if os.path.exists(filename_path):
+                with open(filename_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                if content and not content.endswith('(with manual sales)') and content not in ['Active Catalog', 'No sales recorded yet']:
+                    with open(filename_path, 'w', encoding='utf-8') as f:
+                        f.write(f"{content} (with manual sales)")
+            else:
+                with open(filename_path, 'w', encoding='utf-8') as f:
+                    f.write("Active Catalog")
+        except Exception:
+            pass
+
         return jsonify({'message': 'Sale recorded', 'sale': sale.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
@@ -123,6 +140,17 @@ def upload_sales():
             stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
         except UnicodeDecodeError:
             return jsonify({'message': 'Invalid file encoding. Please upload a UTF-8 encoded CSV file.'}), 400
+            
+        # Restore stock for existing sales of the same filename before clearing
+        existing_file_sales = Sale.query.filter(Sale.source_file == file.filename).all()
+        for s in existing_file_sales:
+            prod = Product.query.get(s.product_id)
+            if prod:
+                prod.stock_quantity += s.quantity
+        
+        # Clear only the sales of this filename
+        Sale.query.filter(Sale.source_file == file.filename).delete()
+        db.session.commit()
             
         csv_reader = csv.DictReader(stream)
         
@@ -182,7 +210,8 @@ def upload_sales():
                 unit_price=unit_price,
                 total_amount=round(qty * unit_price, 2),
                 sale_date=sale_date,
-                note=row.get('note', '')
+                note=row.get('note', ''),
+                source_file=file.filename
             )
             
             product.stock_quantity -= qty
@@ -190,6 +219,14 @@ def upload_sales():
             success_count += 1
             
         db.session.commit()
+        
+        # Save the name of the last successfully uploaded CSV file
+        if success_count > 0:
+            try:
+                with open('last_uploaded_filename.txt', 'w', encoding='utf-8') as f:
+                    f.write(file.filename)
+            except Exception as e:
+                print("Failed to save last uploaded filename:", str(e))
         
         if errors and success_count == 0:
             return jsonify({'message': 'Upload failed completely', 'errors': errors}), 400
@@ -237,26 +274,73 @@ def delete_sale(sale_id):
 def get_analytics():
     try:
         today = date.today()
-        week_ago = today - timedelta(days=6)
-        month_start = today.replace(day=1)
+        
+        # Get target source parameter
+        source = request.args.get('source')
+        
+        # Retrieve the last uploaded CSV filename from metadata
+        last_filename = "Active Catalog"
+        try:
+            import os
+            if os.path.exists('last_uploaded_filename.txt'):
+                with open('last_uploaded_filename.txt', 'r', encoding='utf-8') as f:
+                    last_filename = f.read().strip()
+        except Exception:
+            pass
 
-        # Today's stats
-        today_sales = db.session.query(
-            func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
-        ).filter(Sale.sale_date == today).first()
+        # Query all unique uploaded CSV filenames (excluding POS)
+        unique_sources = db.session.query(Sale.source_file).distinct().all()
+        uploaded_files = [r[0] for r in unique_sources if r[0] and r[0] != 'POS']
 
-        # Monthly stats
-        monthly_sales = db.session.query(
-            func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
-        ).filter(Sale.sale_date >= month_start).first()
+        # Determine default source if not provided
+        if not source:
+            if last_filename in uploaded_files:
+                source = last_filename
+            elif uploaded_files:
+                source = uploaded_files[0]
+            else:
+                source = 'combined' # Fallback to combined/all if no last uploaded file
 
-        # 7-day chart data
+        # Build dynamic queries based on selected source
+        def apply_source_filter(query_obj):
+            if source == 'POS':
+                return query_obj.filter(Sale.source_file == 'POS')
+            elif source == 'combined':
+                return query_obj # No filter, combined all
+            else:
+                return query_obj.filter(Sale.source_file == source)
+
+        # Determine reference date dynamically from the latest sales record for this source
+        max_sale_date_query = db.session.query(func.max(Sale.sale_date))
+        max_sale_date_query = apply_source_filter(max_sale_date_query)
+        max_sale_date_val = max_sale_date_query.first()[0]
+        reference_date = max_sale_date_val if max_sale_date_val else today
+        
+        month_start = reference_date.replace(day=1)
+
+        # Today's stats relative to reference_date
+        today_sales_query = db.session.query(
+            func.count(Sale.id), func.coalesce(func.sum(Sale.quantity * Sale.unit_price), 0)
+        ).filter(Sale.sale_date == reference_date)
+        today_sales_query = apply_source_filter(today_sales_query)
+        today_sales = today_sales_query.first()
+
+        # Monthly stats relative to reference_date month
+        monthly_sales_query = db.session.query(
+            func.count(Sale.id), func.coalesce(func.sum(Sale.quantity * Sale.unit_price), 0)
+        ).filter(Sale.sale_date >= month_start, Sale.sale_date <= reference_date)
+        monthly_sales_query = apply_source_filter(monthly_sales_query)
+        monthly_sales = monthly_sales_query.first()
+
+        # 7-day chart data leading up to reference_date
         chart_data = []
         for i in range(6, -1, -1):
-            d = today - timedelta(days=i)
-            row = db.session.query(
-                func.count(Sale.id), func.coalesce(func.sum(Sale.total_amount), 0)
-            ).filter(Sale.sale_date == d).first()
+            d = reference_date - timedelta(days=i)
+            row_query = db.session.query(
+                func.count(Sale.id), func.coalesce(func.sum(Sale.quantity * Sale.unit_price), 0)
+            ).filter(Sale.sale_date == d)
+            row_query = apply_source_filter(row_query)
+            row = row_query.first()
             chart_data.append({
                 'day': d.strftime('%a'),
                 'date': d.strftime('%Y-%m-%d'),
@@ -265,12 +349,14 @@ def get_analytics():
             })
 
         # Top products
-        top_products = db.session.query(
+        top_products_query = db.session.query(
             Product.name,
             func.sum(Sale.quantity).label('total_qty'),
-            func.sum(Sale.total_amount).label('total_revenue')
-        ).join(Sale).group_by(Product.id).order_by(
-            func.sum(Sale.total_amount).desc()
+            func.sum(Sale.quantity * Sale.unit_price).label('total_revenue')
+        ).join(Sale)
+        top_products_query = apply_source_filter(top_products_query)
+        top_products = top_products_query.group_by(Product.id).order_by(
+            func.sum(Sale.quantity * Sale.unit_price).desc()
         ).limit(5).all()
 
         # Low stock count
@@ -278,20 +364,143 @@ def get_analytics():
             Product.stock_quantity <= Product.low_stock_threshold
         ).count()
 
-        # Revenue by Category
-        revenue_by_category = db.session.query(
+        # Revenue by Category: Revenue = quantity * unit_price
+        revenue_by_category_query = db.session.query(
             Product.category,
-            func.sum(Sale.total_amount).label('total_revenue')
-        ).join(Sale).group_by(Product.category).all()
+            func.sum(Sale.quantity * Sale.unit_price).label('total_revenue')
+        ).join(Sale)
+        revenue_by_category_query = apply_source_filter(revenue_by_category_query)
+        revenue_by_category = revenue_by_category_query.group_by(Product.category).all()
+
+        category_map = {}
+        for cat, total in revenue_by_category:
+            if cat is None:
+                continue
+            cat_trimmed = cat.strip()
+            if not cat_trimmed:
+                continue
+            
+            # Normalize to lowercase and group case-insensitively
+            cat_normalized = cat_trimmed.lower()
+            category_map[cat_normalized] = category_map.get(cat_normalized, 0.0) + float(total or 0)
+
+        # Calculate percentage based on total revenue
+        total_revenue = sum(category_map.values())
+        
+        category_data = []
+        for k, v in category_map.items():
+            percentage = round((v / total_revenue * 100), 2) if total_revenue > 0 else 0.0
+            category_data.append({
+                'name': k.title(),
+                'value': percentage,      # Percentage based on total revenue
+                'revenue': round(v, 2)    # Raw revenue
+            })
+
+        # New metrics:
+        # 1. Sales Volume by Product (sorted descending by quantity sold)
+        sales_vol_query = db.session.query(
+            Product.name,
+            func.sum(Sale.quantity).label('total_qty')
+        ).join(Sale)
+        sales_vol_query = apply_source_filter(sales_vol_query)
+        sales_vol = sales_vol_query.group_by(Product.id).order_by(
+            func.sum(Sale.quantity).desc()
+        ).all()
+        
+        sales_volume_by_product = [{'name': r[0], 'quantity': int(r[1])} for r in sales_vol]
+
+        # 2. Top Selling Product (highest quantity sold)
+        top_selling_data = {
+            'name': sales_vol[0][0] if sales_vol else 'N/A',
+            'quantity': int(sales_vol[0][1]) if sales_vol else 0
+        }
+
+        # 3. Highest Revenue Product (highest quantity * unit_price)
+        highest_rev_query = db.session.query(
+            Product.name,
+            func.sum(Sale.quantity * Sale.unit_price).label('total_rev')
+        ).join(Sale)
+        highest_rev_query = apply_source_filter(highest_rev_query)
+        highest_rev_prod = highest_rev_query.group_by(Product.id).order_by(
+            func.sum(Sale.quantity * Sale.unit_price).desc()
+        ).first()
+
+        highest_revenue_product = {
+            'name': highest_rev_prod[0] if highest_rev_prod else 'N/A',
+            'revenue': round(float(highest_rev_prod[1]), 2) if highest_rev_prod else 0.0
+        }
+
+        # 4. Highest Profit Product (highest quantity * (unit_price - buy_price))
+        highest_prof_query = db.session.query(
+            Product.name,
+            func.sum(Sale.quantity * (Sale.unit_price - Product.buy_price)).label('total_prof')
+        ).join(Sale)
+        highest_prof_query = apply_source_filter(highest_prof_query)
+        highest_prof_prod = highest_prof_query.group_by(Product.id).order_by(
+            func.sum(Sale.quantity * (Sale.unit_price - Product.buy_price)).desc()
+        ).first()
+
+        if highest_prof_prod:
+            prof_name = highest_prof_prod[0]
+            prof_val = float(highest_prof_prod[1])
+            
+            # Query total revenue for this product to calculate margin
+            prod_rev_query = db.session.query(
+                func.sum(Sale.quantity * Sale.unit_price)
+            ).join(Product).filter(Product.name == prof_name)
+            prod_rev_query = apply_source_filter(prod_rev_query)
+            prod_rev_val = prod_rev_query.scalar() or 0.0
+            
+            margin = round((prof_val / prod_rev_val * 100), 1) if prod_rev_val > 0 else 0.0
+        else:
+            prof_name = 'N/A'
+            prof_val = 0.0
+            margin = 0.0
+
+        highest_profit_product = {
+            'name': prof_name,
+            'profit': round(prof_val, 2),
+            'margin': margin
+        }
+
+        # Calculate total quantity sold for active source
+        total_qty_query = db.session.query(func.coalesce(func.sum(Sale.quantity), 0))
+        total_qty_query = apply_source_filter(total_qty_query)
+        total_qty_sold = int(total_qty_query.scalar() or 0)
+
+        # Calculate total revenue for active source
+        total_rev_query = db.session.query(func.coalesce(func.sum(Sale.quantity * Sale.unit_price), 0.0))
+        total_rev_query = apply_source_filter(total_rev_query)
+        total_revenue = float(total_rev_query.scalar() or 0.0)
+
+        # Calculate total orders for active source
+        total_orders_query = db.session.query(func.count(Sale.id))
+        total_orders_query = apply_source_filter(total_orders_query)
+        total_orders = int(total_orders_query.scalar() or 0)
+
+        sales_count = db.session.query(func.count(Sale.id)).scalar()
+        if sales_count == 0:
+            last_filename = "No sales recorded yet"
 
         return jsonify({
             'today': {'count': int(today_sales[0]), 'revenue': float(today_sales[1])},
             'monthly': {'count': int(monthly_sales[0]), 'revenue': float(monthly_sales[1])},
             'chart_data': chart_data,
             'top_products': [{'name': p[0], 'qty': int(p[1]), 'revenue': float(p[2])} for p in top_products],
-            'category_data': [{'name': c[0] or 'General', 'value': float(c[1])} for c in revenue_by_category],
+            'category_data': category_data,
             'total_products': Product.query.count(),
-            'low_stock_count': low_stock_count
+            'low_stock_count': low_stock_count,
+            'last_uploaded_file': last_filename,
+            'uploaded_files': uploaded_files,
+            'current_source': source,
+            # New metrics returned:
+            'sales_volume_by_product': sales_volume_by_product,
+            'top_selling_product': top_selling_data,
+            'highest_revenue_product': highest_revenue_product,
+            'highest_profit_product': highest_profit_product,
+            'total_qty_sold': total_qty_sold,
+            'total_revenue': total_revenue,
+            'total_orders': total_orders
         }), 200
     except Exception as e:
         import traceback
