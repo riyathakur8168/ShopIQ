@@ -3,21 +3,22 @@ import SalesEntry from '../components/sales/SalesEntry';
 import SalesCSVUpload from '../components/sales/SalesCSVUpload';
 import SalesAnalytics from '../components/sales/SalesAnalytics';
 import SalesReports from '../components/sales/SalesReports';
+import DashboardTab from './DashboardTab';
 
-export default function Sales() {
-  const [activeTab, setActiveTab] = useState('Sales Entry');
+export default function Sales({ setActiveTab: setGlobalActiveTab }) {
+  const [activeTab, setActiveTab] = useState('Overview');
   const [recentUploads, setRecentUploads] = useState([]);
   
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       <div>
-        <h2 className="page-title">Sales & Analytics</h2>
-        <p className="page-subtitle">Manage transactions and view performance reports</p>
+        <h2 className="page-title">Analytics & Reports</h2>
+        <p className="page-subtitle">Business overview, analytics, and legacy sales tools</p>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-6">
-        {['Sales Entry', 'CSV Upload', 'Analytics', 'Reports'].map(tab => (
+        {['Overview', 'Sales Entry', 'CSV Upload', 'Analytics', 'Reports'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -35,6 +36,7 @@ export default function Sales() {
 
       {/* Tab Content */}
       <div className="pt-2">
+        {activeTab === 'Overview' && <DashboardTab setActiveTab={setGlobalActiveTab} />}
         {activeTab === 'Sales Entry' && <SalesEntry />}
         {activeTab === 'CSV Upload' && <SalesCSVUpload recentUploads={recentUploads} setRecentUploads={setRecentUploads} setActiveTab={setActiveTab} />}
         {activeTab === 'Analytics' && <SalesAnalytics />}

@@ -4,13 +4,13 @@ import DashboardTab from './DashboardTab';
 import Sales from './Sales';
 import Inventory from './Inventory';
 import Customers from './Customers';
-import AIAssistant from './AIAssistant';
 import Settings from './Settings';
+import POSCounter from './POSCounter';
 import { useAuth } from '../context/AuthContext';
 import { getInventoryNotifications } from '../services/api';
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [activeTab, setActiveTab] = useState('POS Counter');
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -30,13 +30,12 @@ export default function Dashboard() {
 
   const renderPage = () => {
     switch (activeTab) {
-      case 'Dashboard':   return <DashboardTab setActiveTab={setActiveTab} />;
-      case 'Sales':       return <Sales />;
+      case 'POS Counter': return <POSCounter setActiveTab={setActiveTab} />;
+      case 'Analytics':   return <Sales setActiveTab={setActiveTab} />;
       case 'Inventory':   return <Inventory />;
       case 'Customers':   return <Customers />;
-      case 'AIAssistant': return <AIAssistant />;
       case 'Settings':    return <Settings />;
-      default:            return <DashboardTab setActiveTab={setActiveTab} />;
+      default:            return <POSCounter setActiveTab={setActiveTab} />;
     }
   };
 

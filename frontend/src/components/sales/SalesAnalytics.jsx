@@ -120,18 +120,25 @@ export default function SalesAnalytics() {
         </div>
         
         <div className={`flex items-center gap-2 transition-opacity ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Select Dataset:</label>
-          <select
-            value={selectedSource}
-            onChange={(e) => setSelectedSource(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer min-w-[200px]"
-          >
-            <option value="combined">🗂️ Combined Analytics (All)</option>
-            <option value="POS">💻 Manual POS Sales Only</option>
-            {data.uploaded_files && data.uploaded_files.map(file => (
-              <option key={file} value={file}>📄 {file}</option>
-            ))}
-          </select>
+          {(!data.uploaded_files || data.uploaded_files.length === 0) ? (
+            <span className="text-sm font-bold text-slate-500 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+              🗂️ Default Analytics (POS Sales)
+            </span>
+          ) : (
+            <>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Select Dataset:</label>
+              <select
+                value={selectedSource}
+                onChange={(e) => setSelectedSource(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer min-w-[200px]"
+              >
+                <option value="combined">🗂️ Combined Analytics (All)</option>
+                {data.uploaded_files.map(file => (
+                  <option key={file} value={file}>📄 {file}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       </div>
 

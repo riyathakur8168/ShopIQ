@@ -160,6 +160,18 @@ def upload_sales():
         db.session.commit()
             
         csv_reader = csv.DictReader(stream)
+        headers = csv_reader.fieldnames
+        
+        if not headers:
+            return jsonify({'message': 'CSV file is empty or missing headers.'}), 400
+            
+        required_columns = ['product_name', 'quantity', 'unit_price']
+        missing = [col for col in required_columns if col not in headers]
+        if missing:
+            return jsonify({
+                'message': f"Missing required column(s): {', '.join(missing)}",
+                'errors': [f"The CSV must contain exactly these headers: product_name, quantity, unit_price"]
+            }), 400
         
         success_count = 0
         errors = []

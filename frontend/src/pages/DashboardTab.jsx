@@ -179,12 +179,9 @@ export default function DashboardTab({ setActiveTab }) {
             </h3>
           </div>
           <div className="p-6">
-            <p className="text-sm text-primary-50 leading-relaxed mb-6">
+            <p className="text-sm text-primary-50 leading-relaxed">
               "Your sales for **Aashirvaad Atta** usually peak on weekends. You currently have 2 left in stock. I recommend reordering at least 15 units before Friday to avoid stockouts."
             </p>
-            <button onClick={() => setActiveTab('AIAssistant')} className="w-full bg-white text-primary-700 font-semibold py-2.5 rounded-lg text-sm hover:bg-primary-50 transition-colors">
-              Chat with AI Assistant →
-            </button>
           </div>
         </div>
       </div>

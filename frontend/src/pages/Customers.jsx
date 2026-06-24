@@ -47,6 +47,7 @@ function DirectoryTab() {
   const [form, setForm] = useState({ name: '', phone: '', address: '' });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState('');
   const { toast } = useToast();
 
   const load = async () => {
