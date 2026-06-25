@@ -7,10 +7,17 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    first_name = db.Column(db.String(100), default='')
+    last_name = db.Column(db.String(100), default='')
+    phone = db.Column(db.String(20), default='')
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='owner')
     shop_name = db.Column(db.String(150), default='My Shop')
+    store_address = db.Column(db.String(255), default='')
+    gst_number = db.Column(db.String(50), default='')
+    store_type = db.Column(db.String(100), default='')
+    is_setup_completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
@@ -21,9 +28,31 @@ class User(db.Model):
 
     def to_dict(self):
         return {
-            'id': self.id, 'name': self.name,
-            'email': self.email, 'shop_name': self.shop_name,
+            'id': self.id,
+            'name': self.name,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'phone': self.phone,
+            'email': self.email,
+            'shop_name': self.shop_name,
+            'store_address': self.store_address,
+            'gst_number': self.gst_number,
+            'store_type': self.store_type,
+            'is_setup_completed': self.is_setup_completed,
             'role': self.role
+        }
+
+
+class Category(db.Model):
+    __tablename__ = 'categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    products = db.relationship('Product', backref='category_rel', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name
         }
 
 
@@ -32,6 +61,7 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     category = db.Column(db.String(100), default='General')
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     buy_price = db.Column(db.Float, nullable=False)
     sell_price = db.Column(db.Float, nullable=False)
     stock_quantity = db.Column(db.Integer, default=0)
@@ -39,19 +69,24 @@ class Product(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship('Sale', backref='product', lazy=True, cascade="all, delete-orphan")
 
-    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10):
+    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10, category_id=None):
         self.name = name
         self.category = category
         self.buy_price = buy_price
         self.sell_price = sell_price
         self.stock_quantity = stock_quantity
         self.low_stock_threshold = low_stock_threshold
+        self.category_id = category_id
 
     def to_dict(self):
         return {
-            'id': self.id, 'name': self.name,
-            'category': self.category, 'buy_price': self.buy_price,
-            'sell_price': self.sell_price, 'stock_quantity': self.stock_quantity,
+            'id': self.id,
+            'name': self.name,
+            'category': self.category_rel.name if self.category_rel else (self.category or 'General'),
+            'category_id': self.category_id,
+            'buy_price': self.buy_price,
+            'sell_price': self.sell_price,
+            'stock_quantity': self.stock_quantity,
             'low_stock_threshold': self.low_stock_threshold,
             'is_low_stock': self.stock_quantity <= self.low_stock_threshold,
             'profit_margin': round(((self.sell_price - self.buy_price) / self.buy_price * 100), 1) if self.buy_price > 0 else 0
@@ -167,3 +202,55 @@ class SystemState(db.Model):
     __tablename__ = 'system_state'
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.Text, nullable=False)
+
+
+from sqlalchemy import event
+
+AUTO_CATEGORIES = {
+    'Dairy': ['milk', 'curd', 'paneer', 'butter', 'cheese', 'lassi', 'buttermilk', 'ghee', 'yogurt'],
+    'Beverages': ['tea', 'coffee', 'juice', 'pepsi', 'coke', 'soda', 'water', 'cold drink', 'sprite', 'fanta', 'limca'],
+    'Food': ['rice', 'atta', 'sugar', 'dal', 'flour', 'salt', 'oil', 'masala', 'wheat', 'lentils', 'pulse', 'spices'],
+    'Health & Personal Care': ['dettol', 'soap', 'toothpaste', 'brush', 'shampoo', 'oil', 'lotion', 'cream', 'sanitizer', 'handwash']
+}
+
+def suggest_category(product_name):
+    name_lower = product_name.lower()
+    for category_name, keywords in AUTO_CATEGORIES.items():
+        for keyword in keywords:
+            if keyword in name_lower:
+                return category_name
+    return 'General'
+
+def normalize_category_name(name):
+    if not name or not name.strip():
+        return 'General'
+    clean = name.strip()
+    if clean.lower() == 'general':
+        return 'General'
+    return clean.title()
+
+def resolve_product_category(product, session):
+    cat_str = product.category
+    if not cat_str or not cat_str.strip():
+        cat_str = suggest_category(product.name)
+    
+    normalized_name = normalize_category_name(cat_str)
+    
+    cat = session.query(Category).filter(db.func.lower(Category.name) == normalized_name.lower()).first()
+    if not cat:
+        for obj in session.new:
+            if isinstance(obj, Category) and obj.name.lower() == normalized_name.lower():
+                cat = obj
+                break
+        if not cat:
+            cat = Category(name=normalized_name)
+            session.add(cat)
+            
+    product.category_rel = cat
+    product.category = cat.name
+
+@event.listens_for(db.Session, 'before_flush')
+def before_flush(session, flush_context, instances):
+    for obj in session.new.union(session.dirty):
+        if isinstance(obj, Product):
+            resolve_product_category(obj, session)

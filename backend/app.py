@@ -40,6 +40,24 @@ def create_app(config_class=Config):
                 print("Successfully migrated database: added source_file column to sales table.")
             except Exception as e:
                 print("Failed to run database migration:", str(e))
+
+        # Schema migration check for users table columns
+        try:
+            db.session.execute(db.text("SELECT phone FROM users LIMIT 1"))
+        except Exception:
+            db.session.rollback()
+            try:
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN first_name VARCHAR(100) DEFAULT ''"))
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN last_name VARCHAR(100) DEFAULT ''"))
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT ''"))
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN store_address VARCHAR(255) DEFAULT ''"))
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN gst_number VARCHAR(50) DEFAULT ''"))
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN store_type VARCHAR(100) DEFAULT ''"))
+                db.session.execute(db.text("ALTER TABLE users ADD COLUMN is_setup_completed BOOLEAN DEFAULT 0"))
+                db.session.commit()
+                print("Successfully migrated database: added business setup columns to users table.")
+            except Exception as e:
+                print("Failed to run users table database migration:", str(e))
         _seed_demo_data()
 
     return app

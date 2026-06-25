@@ -139,7 +139,7 @@ export default function Dashboard() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8 bg-slate-50">
+        <main className={`flex-1 overflow-hidden bg-slate-50 ${activeTab === 'POS Counter' ? 'p-0' : 'p-6 lg:p-8 overflow-y-auto'}`}>
           {renderPage()}
         </main>
       </div>

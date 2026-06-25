@@ -25,6 +25,7 @@ API.interceptors.response.use(
 // Auth
 export const login = (data) => API.post('/auth/login', data);
 export const signup = (data) => API.post('/auth/signup', data);
+export const setupBusiness = (data) => API.post('/auth/business-setup', data);
 
 // Products
 export const getProducts = (params) => API.get('/products/', { params });
@@ -32,6 +33,10 @@ export const addProduct = (data) => API.post('/products/', data);
 export const updateProduct = (id, data) => API.put(`/products/${id}`, data);
 export const deleteProduct = (id) => API.delete(`/products/${id}`);
 export const getInventoryNotifications = () => API.get('/products/notifications');
+export const getCategories = () => API.get('/products/categories');
+export const addCategory = (data) => API.post('/products/categories', data);
+export const renameCategory = (id, data) => API.put(`/products/categories/${id}`, data);
+export const deleteCategory = (id) => API.delete(`/products/categories/${id}`);
 export const uploadOCRImage = (file) => {
   const formData = new FormData();
   formData.append('file', file);

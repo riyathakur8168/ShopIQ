@@ -2,8 +2,90 @@ from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Product, Sale
 from flask_jwt_extended import jwt_required
+import os
+import sys
 
 products_bp = Blueprint('products', __name__, url_prefix='/api/products')
+
+@products_bp.route('/categories', methods=['GET'])
+@jwt_required()
+def get_categories():
+    from models import Category
+    categories = Category.query.order_by(Category.name.asc()).all()
+    return jsonify([cat.to_dict() for cat in categories]), 200
+
+@products_bp.route('/categories', methods=['POST'])
+@jwt_required()
+def add_category():
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'message': 'Missing category name'}), 400
+
+    name = data['name'].strip()
+    normalized_name = name.title() if name.lower() != 'general' else 'General'
+
+    from models import Category
+    existing = Category.query.filter(db.func.lower(Category.name) == normalized_name.lower()).first()
+    if existing:
+        return jsonify({'message': 'Category already exists', 'category': existing.to_dict()}), 400
+
+    new_cat = Category(name=normalized_name)
+    db.session.add(new_cat)
+    db.session.commit()
+
+    return jsonify({'message': 'Category created successfully', 'category': new_cat.to_dict()}), 201
+
+@products_bp.route('/categories/<int:category_id>', methods=['PUT'])
+@jwt_required()
+def rename_category(category_id):
+    from models import Category
+    cat = Category.query.get(category_id)
+    if not cat:
+        return jsonify({'message': 'Category not found'}), 404
+
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'message': 'Missing category name'}), 400
+
+    new_name = data['name'].strip()
+    normalized_name = new_name.title() if new_name.lower() != 'general' else 'General'
+
+    existing = Category.query.filter(db.func.lower(Category.name) == normalized_name.lower()).first()
+    if existing and existing.id != category_id:
+        return jsonify({'message': 'Another category with this name already exists'}), 400
+
+    cat.name = normalized_name
+
+    for p in cat.products:
+        p.category = normalized_name
+
+    db.session.commit()
+    return jsonify({'message': 'Category renamed successfully', 'category': cat.to_dict()}), 200
+
+@products_bp.route('/categories/<int:category_id>', methods=['DELETE'])
+@jwt_required()
+def delete_category(category_id):
+    from models import Category
+    cat = Category.query.get(category_id)
+    if not cat:
+        return jsonify({'message': 'Category not found'}), 404
+
+    if cat.name.lower() == 'general':
+        return jsonify({'message': 'Cannot delete General category'}), 400
+
+    general_cat = Category.query.filter(db.func.lower(Category.name) == 'general').first()
+    if not general_cat:
+        general_cat = Category(name='General')
+        db.session.add(general_cat)
+        db.session.commit()
+
+    for p in cat.products:
+        p.category_id = general_cat.id
+        p.category = 'General'
+
+    db.session.delete(cat)
+    db.session.commit()
+    return jsonify({'message': 'Category deleted successfully'}), 200
 
 @products_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -18,7 +100,9 @@ def get_products():
         safe_search = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         query = query.filter(Product.name.ilike(f'%{safe_search}%', escape='\\'))
     if category and category != 'All':
-        query = query.filter(Product.category == category)
+        # Match case-insensitively using relationship or string field
+        from models import Category
+        query = query.join(Category, Product.category_id == Category.id).filter(db.func.lower(Category.name) == category.lower())
         
     query = query.order_by(Product.id.desc())
 
@@ -90,7 +174,8 @@ def add_product():
         category=data.get('category', ''),
         buy_price=float(data['buy_price']),
         sell_price=float(data['sell_price']),
-        stock_quantity=int(data.get('stock_quantity', 0))
+        stock_quantity=int(data.get('stock_quantity', 0)),
+        low_stock_threshold=int(data.get('low_stock_threshold', 10))
     )
     
     db.session.add(new_product)
@@ -111,6 +196,7 @@ def update_product(product_id):
     product.buy_price = data.get('buy_price', product.buy_price)
     product.sell_price = data.get('sell_price', product.sell_price)
     product.stock_quantity = data.get('stock_quantity', product.stock_quantity)
+    product.low_stock_threshold = data.get('low_stock_threshold', product.low_stock_threshold)
 
     db.session.commit()
     return jsonify({'message': 'Product updated successfully', 'product': product.to_dict()}), 200

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getProducts, addProduct, updateProduct, deleteProduct, uploadOCRImage } from '../services/api';
+import { getProducts, addProduct, updateProduct, deleteProduct, uploadOCRImage, getCategories, addCategory, renameCategory, deleteCategory } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
 const EMPTY_FORM = { name: '', category: '', buy_price: '', sell_price: '', stock_quantity: '', low_stock_threshold: 10 };
@@ -16,7 +16,7 @@ export default function Inventory() {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-6">
-        {['Products', 'Stock', 'OCR Import'].map(tab => (
+        {['Products', 'Stock', 'OCR Import', 'Categories'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -37,6 +37,7 @@ export default function Inventory() {
         {activeTab === 'Products' && <ProductsTab />}
         {activeTab === 'Stock' && <StockTab />}
         {activeTab === 'OCR Import' && <OCRImportTab />}
+        {activeTab === 'Categories' && <CategoriesTab />}
       </div>
     </div>
   );
@@ -444,6 +445,193 @@ function OCRImportTab() {
             <p className="text-xs text-slate-400 mt-2">Supports JPG, PNG (Max 10MB)</p>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+function CategoriesTab() {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [editCategory, setEditCategory] = useState(null);
+  const [editName, setEditName] = useState('');
+  
+  const { toast } = useToast();
+
+  const loadCategories = async () => {
+    setLoading(true);
+    try {
+      const res = await getCategories();
+      setCategories(res.data || []);
+    } catch {
+      toast('Failed to load categories', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    setSubmitting(true);
+    try {
+      await addCategory({ name: newCategoryName.trim() });
+      toast('Category added successfully!', 'success');
+      setNewCategoryName('');
+      loadCategories();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to add category', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRename = async (e) => {
+    e.preventDefault();
+    if (!editName.trim() || !editCategory) return;
+    setSubmitting(true);
+    try {
+      await renameCategory(editCategory.id, { name: editName.trim() });
+      toast('Category renamed successfully!', 'success');
+      setEditCategory(null);
+      setEditName('');
+      loadCategories();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to rename category', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (name.toLowerCase() === 'general') {
+      return toast('Cannot delete General category', 'error');
+    }
+    if (!confirm(`Delete category "${name}"? Products in this category will be remapped to "General".`)) {
+      return;
+    }
+    try {
+      await deleteCategory(id);
+      toast('Category deleted successfully', 'success');
+      loadCategories();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to delete category', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* Left Side: Create / Edit Form */}
+        <div className="md:col-span-1 space-y-4">
+          <div className="card p-5 bg-white border border-slate-200 shadow-sm rounded-2xl">
+            <h4 className="text-sm font-bold text-slate-800 mb-4">
+              {editCategory ? 'Rename Category' : 'Create Category'}
+            </h4>
+            
+            {editCategory ? (
+              <form onSubmit={handleRename} className="space-y-3">
+                <div>
+                  <label className="input-label text-[10px] uppercase font-bold text-slate-400">Current Name: {editCategory.name}</label>
+                  <input
+                    required
+                    type="text"
+                    className="input border-slate-200 w-full"
+                    placeholder="Enter new name"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" disabled={submitting} className="btn-primary py-2 text-xs flex-1">
+                    {submitting ? 'Saving...' : 'Rename'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditCategory(null); setEditName(''); }}
+                    className="btn-secondary py-2 text-xs flex-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleAdd} className="space-y-3">
+                <div>
+                  <label className="input-label text-[10px] uppercase font-bold text-slate-400">Category Name</label>
+                  <input
+                    required
+                    type="text"
+                    className="input border-slate-200 w-full"
+                    placeholder="e.g. Dairy"
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                  />
+                </div>
+                <button type="submit" disabled={submitting} className="btn-primary py-2 text-xs w-full">
+                  {submitting ? 'Creating...' : 'Create Category'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+
+        {/* Right Side: List of Categories */}
+        <div className="md:col-span-2">
+          <div className="card p-5 bg-white border border-slate-200 shadow-sm rounded-2xl">
+            <h4 className="text-sm font-bold text-slate-800 mb-4">Available Categories</h4>
+            
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <span className="spinner border-primary-500 w-6 h-6"></span>
+              </div>
+            ) : categories.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center font-medium">No custom categories configured.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto pr-1">
+                {categories.map(cat => (
+                  <div key={cat.id} className="flex justify-between items-center py-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{cat.name}</p>
+                      {cat.name.toLowerCase() === 'general' && (
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">System Default</p>
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setEditCategory(cat); setEditName(cat.name); }}
+                        className="text-xs font-bold text-primary-600 hover:text-primary-700 bg-primary-50 px-2.5 py-1 rounded-md"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        disabled={cat.name.toLowerCase() === 'general'}
+                        onClick={() => handleDelete(cat.id, cat.name)}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-md transition-colors ${
+                          cat.name.toLowerCase() === 'general'
+                            ? 'text-slate-300 bg-slate-100 cursor-not-allowed'
+                            : 'text-red-600 hover:text-red-700 bg-red-50'
+                        }`}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   );

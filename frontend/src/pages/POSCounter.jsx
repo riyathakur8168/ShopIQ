@@ -1,17 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
-import { getProducts, getCustomers, addSale, addCredit, createInvoice, addCustomer } from '../services/api';
+import { getProducts, getCustomers, addSale, addCredit, createInvoice, addCustomer, getCategories } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
 export default function POSCounter({ setActiveTab }) {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [categories, setCategories] = useState(['All']);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState([]);
   
   // Customer State
-  const [customerMode, setCustomerMode] = useState('Walk-in'); // 'Walk-in', 'Existing', 'New'
+  const [customerMode, setCustomerMode] = useState('Walk-in'); // 'Walk-in', 'Existing'
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', address: '' });
+  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [submitting, setSubmitting] = useState(false);
@@ -22,10 +25,13 @@ export default function POSCounter({ setActiveTab }) {
   useEffect(() => {
     Promise.all([
       getProducts({ per_page: 100 }),
-      getCustomers({ per_page: 100 })
-    ]).then(([prodRes, custRes]) => {
+      getCustomers({ per_page: 100 }),
+      getCategories()
+    ]).then(([prodRes, custRes, catRes]) => {
       setProducts(prodRes.data.items || prodRes.data || []);
       setCustomers(custRes.data.items || custRes.data || []);
+      const backendCats = catRes.data || [];
+      setCategories(['All', ...backendCats.map(c => c.name)]);
       setLoading(false);
     }).catch(err => {
       console.error(err);
@@ -34,14 +40,28 @@ export default function POSCounter({ setActiveTab }) {
     });
   }, [toast]);
 
+  const handleModeChange = (mode) => {
+    if (mode === 'New') {
+      setShowNewCustomerModal(true);
+    } else {
+      setCustomerMode(mode);
+      if (mode === 'Walk-in') {
+        setSelectedCustomer(null);
+      }
+    }
+  };
+
   const filteredProducts = useMemo(() => {
-    if (!searchQuery) return products;
-    const lowerQ = searchQuery.toLowerCase();
-    return products.filter(p => 
-      p.name.toLowerCase().includes(lowerQ) || 
-      (p.category && p.category.toLowerCase().includes(lowerQ))
-    );
-  }, [products, searchQuery]);
+    let filtered = products;
+    if (selectedCategory !== 'All') {
+      filtered = filtered.filter(p => p.category === selectedCategory);
+    }
+    if (searchQuery) {
+      const lowerQ = searchQuery.toLowerCase();
+      filtered = filtered.filter(p => p.name.toLowerCase().includes(lowerQ));
+    }
+    return filtered;
+  }, [products, searchQuery, selectedCategory]);
 
   const addToCart = (product) => {
     setCart(prev => {
@@ -141,30 +161,17 @@ export default function POSCounter({ setActiveTab }) {
   const handleGenerateBill = async () => {
     if (cart.length === 0) return toast('Cart is empty', 'error');
     if (paymentMethod === 'Udhar' && customerMode === 'Walk-in') {
-      return toast('Udhar requires an Existing or New customer', 'error');
-    }
-    if (customerMode === 'New' && !newCustomer.name.trim()) {
-      return toast('New customer name is required', 'error');
+      return toast('Udhar requires an Existing customer', 'error');
     }
     if (customerMode === 'Existing' && !selectedCustomer && paymentMethod === 'Udhar') {
-      return toast('Select an existing customer for Udhar', 'error');
+      return toast('Select a customer for Udhar', 'error');
     }
 
     setSubmitting(true);
     try {
       let finalCustomer = null;
 
-      // 1. Process Customer (if New)
-      if (customerMode === 'New') {
-        const cRes = await addCustomer({
-          name: newCustomer.name,
-          phone: newCustomer.phone,
-          address: newCustomer.address,
-        });
-        // Handle response gracefully
-        finalCustomer = cRes.data.customer || cRes.data;
-        setCustomers(prev => [...prev, finalCustomer]);
-      } else if (customerMode === 'Existing' && selectedCustomer) {
+      if (customerMode === 'Existing' && selectedCustomer) {
         finalCustomer = selectedCustomer;
       }
 
@@ -211,9 +218,14 @@ export default function POSCounter({ setActiveTab }) {
       // Update inventory states
       window.dispatchEvent(new Event('update-notifications'));
       
-      // Refetch products to update stock counts in UI
-      const prodRes = await getProducts({ per_page: 100 });
+      // Refetch products & categories to update UI
+      const [prodRes, catRes] = await Promise.all([
+        getProducts({ per_page: 100 }),
+        getCategories()
+      ]);
       setProducts(prodRes.data.items || prodRes.data || []);
+      const backendCats = catRes.data || [];
+      setCategories(['All', ...backendCats.map(c => c.name)]);
       
     } catch (err) {
       console.error(err);
@@ -232,8 +244,26 @@ export default function POSCounter({ setActiveTab }) {
     <div className="h-full flex flex-col md:flex-row bg-slate-50 overflow-hidden relative animate-fade-in">
       
       {/* Left Pane: Product Catalog */}
-      <div className="flex-1 flex flex-col h-full border-r border-slate-200">
-        <div className="p-4 bg-white border-b border-slate-200 shadow-sm z-10 flex-shrink-0">
+      <div className="w-full md:w-[60%] flex flex-col h-full border-r border-slate-200">
+        <div className="p-4 bg-white border-b border-slate-200 shadow-sm z-10 flex-shrink-0 flex flex-col gap-3">
+          
+          {/* Category Tabs */}
+          <div className="flex overflow-x-auto custom-scrollbar pb-1 gap-2">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${
+                  selectedCategory === cat 
+                    ? 'bg-primary-600 text-white shadow-md' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-4">
             <div className="relative flex-1">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
@@ -242,7 +272,7 @@ export default function POSCounter({ setActiveTab }) {
               <input 
                 type="text" 
                 autoFocus
-                placeholder="Search products by name or category..." 
+                placeholder="Search products in selected category..." 
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all shadow-inner"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -318,14 +348,14 @@ export default function POSCounter({ setActiveTab }) {
       </div>
 
       {/* Right Pane: Unified Checkout Workflow */}
-      <div className="w-full md:w-[420px] bg-white flex flex-col h-full shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-20 flex-shrink-0">
+      <div className="w-full md:w-[40%] bg-white flex flex-col h-full shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-20 flex-shrink-0">
         <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center flex-shrink-0">
           <h2 className="text-lg font-black text-slate-900">Current Sale</h2>
           <span className="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded-md">{cart.length} Items</span>
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">
               <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
@@ -339,10 +369,13 @@ export default function POSCounter({ setActiveTab }) {
                   <h5 className="text-sm font-bold text-slate-800 truncate">{item.name}</h5>
                   <p className="text-xs text-slate-500 font-semibold mt-0.5">₹{item.sell_price.toLocaleString()}</p>
                 </div>
-                <div className="flex items-center gap-2 bg-slate-50 rounded-lg p-1 border border-slate-200">
-                  <button onClick={() => updateCartQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white rounded-md transition-colors font-bold">-</button>
-                  <span className="text-xs font-black w-4 text-center">{item.cartQty}</span>
-                  <button onClick={() => updateCartQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white rounded-md transition-colors font-bold">+</button>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200">
+                    <button onClick={() => updateCartQty(item.id, -1)} className="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white rounded-md transition-colors font-bold leading-none">-</button>
+                    <span className="text-xs font-black w-4 text-center">{item.cartQty}</span>
+                    <button onClick={() => updateCartQty(item.id, 1)} className="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white rounded-md transition-colors font-bold leading-none">+</button>
+                  </div>
+                  <span className="text-[11px] font-black text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded">₹{(item.sell_price * item.cartQty).toLocaleString()}</span>
                 </div>
                 <button 
                   onClick={() => removeFromCart(item.id)}
@@ -356,16 +389,16 @@ export default function POSCounter({ setActiveTab }) {
         </div>
 
         {/* Checkout Controls */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-4 flex-shrink-0">
+        <div className="p-3 bg-slate-50 border-t border-slate-200 flex-shrink-0 flex flex-col gap-2">
           
           {/* Customer Selection Mode */}
           <div>
-            <div className="flex justify-between items-end mb-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Customer</label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Customer</label>
               <div className="flex gap-1 bg-slate-200/50 p-0.5 rounded-lg border border-slate-200">
                 {['Walk-in', 'Existing', 'New'].map(mode => (
-                  <button key={mode} onClick={() => setCustomerMode(mode)}
-                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${
+                  <button key={mode} type="button" onClick={() => handleModeChange(mode)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${
                       customerMode === mode ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
@@ -376,7 +409,7 @@ export default function POSCounter({ setActiveTab }) {
             </div>
 
             {customerMode === 'Existing' && (
-              <div className="animate-fade-in mt-2">
+              <div className="animate-fade-in space-y-2">
                 <select 
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-primary-500 focus:outline-none shadow-sm"
                   value={selectedCustomer ? selectedCustomer.id : ''}
@@ -391,45 +424,39 @@ export default function POSCounter({ setActiveTab }) {
                   ))}
                 </select>
                 {selectedCustomer && (
-                  <p className="text-[10px] text-slate-500 font-semibold mt-1.5 px-1 flex justify-between">
-                    <span>Balance:</span>
-                    <span className={selectedCustomer.total_credit - selectedCustomer.total_paid > 0 ? 'text-red-500' : 'text-emerald-500'}>
-                      ₹{(selectedCustomer.total_credit - selectedCustomer.total_paid).toLocaleString()}
-                    </span>
-                  </p>
+                  <div className="text-[10px] text-slate-600 font-bold space-y-1 bg-amber-50/50 p-2 rounded-xl border border-amber-100/60 shadow-sm">
+                    <div className="flex justify-between">
+                      <span>Current Pending Balance:</span>
+                      <span className="text-red-500">₹{(selectedCustomer.total_credit - selectedCustomer.total_paid).toLocaleString()}</span>
+                    </div>
+                    {paymentMethod === 'Udhar' && (
+                      <>
+                        <div className="flex justify-between text-slate-500 font-semibold">
+                          <span>New Bill Amount:</span>
+                          <span>+ ₹{totalAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="border-t border-amber-200/40 my-1"></div>
+                        <div className="flex justify-between text-amber-900 font-extrabold text-xs">
+                          <span>New Total Outstanding:</span>
+                          <span>₹{((selectedCustomer.total_credit - selectedCustomer.total_paid) + totalAmount).toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
-
-            {customerMode === 'New' && (
-              <div className="space-y-2 animate-fade-in mt-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                <input 
-                  type="text" 
-                  placeholder="Customer Name *" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  value={newCustomer.name}
-                  onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}
-                />
-                <input 
-                  type="text" 
-                  placeholder="Phone Number" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  value={newCustomer.phone}
-                  onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}
-                />
               </div>
             )}
           </div>
 
           {/* Payment Method */}
           <div>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Payment Mode</label>
-            <div className="grid grid-cols-3 gap-2">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Payment Mode</label>
+            <div className="grid grid-cols-3 gap-1">
               {['Cash', 'UPI', 'Udhar'].map(method => (
                 <button
                   key={method}
                   onClick={() => setPaymentMethod(method)}
-                  className={`py-2 text-xs font-bold rounded-xl transition-all border-2 ${
+                  className={`py-1.5 text-[11px] font-bold rounded-lg transition-all border ${
                     paymentMethod === method 
                       ? method === 'Udhar' 
                         ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm'
@@ -444,16 +471,14 @@ export default function POSCounter({ setActiveTab }) {
             
             {/* Dynamic UPI QR Code Panel */}
             {paymentMethod === 'UPI' && cart.length > 0 && (
-              <div className="mt-3 bg-indigo-50 rounded-xl p-4 flex flex-col items-center justify-center border border-indigo-100 animate-fade-in">
-                <div className="bg-white p-2 rounded-lg shadow-sm border border-indigo-50 mb-2">
-                  <img src={qrCodeUrl} alt="UPI QR Code" className="w-24 h-24 object-contain" />
-                </div>
-                <p className="text-xs font-bold text-indigo-900">Scan to pay ₹{totalAmount}</p>
+              <div className="mt-2 flex items-center gap-3 bg-indigo-50 rounded-lg p-2 border border-indigo-100 animate-fade-in">
+                <img src={qrCodeUrl} alt="UPI QR Code" className="w-12 h-12 object-contain bg-white p-1 rounded-md shadow-sm border border-indigo-50" />
+                <p className="text-[11px] font-bold text-indigo-900 leading-tight">Scan to pay<br/>₹{totalAmount}</p>
               </div>
             )}
             {paymentMethod === 'Udhar' && customerMode === 'Walk-in' && (
-              <p className="text-[10px] text-red-500 font-bold mt-2 animate-fade-in">
-                ⚠️ Please select "Existing" or "New" customer to give Udhar.
+              <p className="text-[9px] text-red-500 font-bold mt-1 animate-fade-in">
+                ⚠️ Select "Existing" or "New" customer for Udhar.
               </p>
             )}
           </div>
@@ -482,6 +507,92 @@ export default function POSCounter({ setActiveTab }) {
           </div>
         </div>
       </div>
+
+      {/* New Customer Modal */}
+      {showNewCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-slate-100">
+            <div className="bg-gradient-to-r from-primary-600 to-indigo-600 p-6 text-white">
+              <h3 className="text-lg font-black">Add New Customer</h3>
+              <p className="text-xs text-primary-100 mt-1">Create a customer profile to record sales & credit (Udhar).</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Customer Name *</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter full name" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all shadow-inner"
+                  value={newCustomer.name}
+                  onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Number</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter mobile number" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all shadow-inner"
+                  value={newCustomer.phone}
+                  onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Address (Optional)</label>
+                <textarea 
+                  placeholder="Enter home/shop address" 
+                  rows={2}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all shadow-inner resize-none"
+                  value={newCustomer.address}
+                  onChange={e => setNewCustomer({...newCustomer, address: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button 
+                onClick={() => {
+                  setShowNewCustomerModal(false);
+                  setNewCustomer({ name: '', phone: '', address: '' });
+                }}
+                className="flex-1 py-3 border border-slate-200 bg-white rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  if (!newCustomer.name.trim()) {
+                    return toast('Customer name is required', 'error');
+                  }
+                  try {
+                    const cRes = await addCustomer({
+                      name: newCustomer.name.trim(),
+                      phone: newCustomer.phone.trim(),
+                      address: newCustomer.address.trim(),
+                    });
+                    const savedCustomer = cRes.data.customer || cRes.data;
+                    setCustomers(prev => [...prev, savedCustomer]);
+                    setSelectedCustomer(savedCustomer);
+                    setCustomerMode('Existing');
+                    setShowNewCustomerModal(false);
+                    setNewCustomer({ name: '', phone: '', address: '' });
+                    toast(`Customer "${savedCustomer.name}" saved successfully!`, 'success');
+                  } catch (err) {
+                    console.error(err);
+                    toast(err.response?.data?.message || 'Failed to save customer', 'error');
+                  }
+                }}
+                className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold transition-colors shadow-md shadow-primary-600/20"
+              >
+                Save Customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
