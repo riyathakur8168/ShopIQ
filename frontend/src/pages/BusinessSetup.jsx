@@ -23,9 +23,14 @@ export default function BusinessSetup() {
   const [selectedType, setSelectedType] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { updateUser } = useAuth();
+  const { updateUser, logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const handleSignOut = () => {
+    logout();
+    navigate('/login');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -65,7 +70,13 @@ export default function BusinessSetup() {
             <span className="text-lg font-black text-slate-900 tracking-tight">ShopIQ</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Setup Your Retail Business</h2>
-          <p className="text-sm font-semibold text-slate-500 mt-1">Configure your store profiles to bootstrap default product categories.</p>
+          <p className="text-sm font-semibold text-slate-500 mt-1">
+            Configure your store profiles to bootstrap default product categories.
+            {' '}
+            <button type="button" onClick={handleSignOut} className="text-blue-600 hover:text-blue-700 font-bold ml-1 hover:underline">
+              Sign Out
+            </button>
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">

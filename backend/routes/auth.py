@@ -10,22 +10,33 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 # ── Password validation ─────────────────────────────────────────────────────
 
 MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 64
 
 def _validate_password(password: str) -> str | None:
     """
     Returns an error message string if password is invalid, otherwise None.
     Rules:
       - Minimum 8 characters
-      - At least one letter
+      - Maximum 64 characters
+      - At least one uppercase letter
+      - At least one lowercase letter
       - At least one digit
+      - At least one special character
     """
     if not password or len(password) < MIN_PASSWORD_LENGTH:
         return f'Password must be at least {MIN_PASSWORD_LENGTH} characters long.'
-    if not re.search(r'[A-Za-z]', password):
-        return 'Password must contain at least one letter.'
+    if len(password) > MAX_PASSWORD_LENGTH:
+        return f'Password must be at most {MAX_PASSWORD_LENGTH} characters long.'
+    if not re.search(r'[A-Z]', password):
+        return 'Password must contain at least one uppercase letter.'
+    if not re.search(r'[a-z]', password):
+        return 'Password must contain at least one lowercase letter.'
     if not re.search(r'\d', password):
         return 'Password must contain at least one number.'
+    if not re.search(r'[^A-Za-z0-9]', password):
+        return 'Password must contain at least one special character (e.g. @, #, !).'
     return None
+
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -48,7 +59,14 @@ def signup():
         return jsonify({'message': 'Invalid email address'}), 400
 
     if User.query.filter_by(email=email).first():
-        return jsonify({'message': 'User already exists'}), 400
+        return jsonify({'message': 'An account with this email already exists. Please Sign In.'}), 400
+
+    # Check for duplicate mobile number (only if phone is provided)
+    phone = data.get('phone', '').strip()
+    if phone:
+        existing_phone_user = User.query.filter_by(phone=phone).first()
+        if existing_phone_user:
+            return jsonify({'message': 'An account with this mobile number already exists. Please Sign In.'}), 400
 
     new_user = User(
         name=f"{data['first_name'].strip()} {data['last_name'].strip()}",
@@ -92,6 +110,7 @@ def business_setup():
     user.store_address = data.get('store_address', '').strip()
     user.gst_number = data.get('gst_number', '').strip()
     user.store_type = data['store_type'].strip()
+    user.business_setup_completed = True
     user.is_setup_completed = True
 
     # Initialize the POS Counter categories and products dynamically based on store_type
@@ -121,6 +140,15 @@ def login():
     if not user or not user.check_password(data['password']):
         return jsonify({'message': 'Invalid email or password'}), 401
 
+    # Auto-align setup completed status for existing users (Additional Check)
+    from models import Category
+    has_categories = Category.query.count() > 0
+    if user.shop_name and user.store_type and has_categories:
+        if not user.business_setup_completed:
+            user.business_setup_completed = True
+            user.is_setup_completed = True
+            db.session.commit()
+
     access_token = create_access_token(identity=str(user.id))
     return jsonify({
         'message': 'Login successful',
@@ -136,4 +164,14 @@ def get_me():
     user = db.session.get(User, int(current_user_id))  # Use non-deprecated session.get()
     if not user:
         return jsonify({'message': 'User not found'}), 404
+
+    # Auto-align setup completed status for existing users (Additional Check)
+    from models import Category
+    has_categories = Category.query.count() > 0
+    if user.shop_name and user.store_type and has_categories:
+        if not user.business_setup_completed:
+            user.business_setup_completed = True
+            user.is_setup_completed = True
+            db.session.commit()
+
     return jsonify(user.to_dict()), 200

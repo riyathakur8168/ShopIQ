@@ -29,35 +29,74 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        # Schema migration check for sales table's source_file column
-        try:
-            db.session.execute(db.text("SELECT source_file FROM sales LIMIT 1"))
-        except Exception:
-            db.session.rollback()
-            try:
-                db.session.execute(db.text("ALTER TABLE sales ADD COLUMN source_file VARCHAR(150) DEFAULT 'POS'"))
-                db.session.commit()
-                print("Successfully migrated database: added source_file column to sales table.")
-            except Exception as e:
-                print("Failed to run database migration:", str(e))
 
-        # Schema migration check for users table columns
-        try:
-            db.session.execute(db.text("SELECT phone FROM users LIMIT 1"))
-        except Exception:
-            db.session.rollback()
+        # Helper: safely add a column if it doesn't exist
+        def _add_column_if_missing(check_sql, alter_sql, success_msg):
             try:
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN first_name VARCHAR(100) DEFAULT ''"))
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN last_name VARCHAR(100) DEFAULT ''"))
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT ''"))
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN store_address VARCHAR(255) DEFAULT ''"))
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN gst_number VARCHAR(50) DEFAULT ''"))
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN store_type VARCHAR(100) DEFAULT ''"))
-                db.session.execute(db.text("ALTER TABLE users ADD COLUMN is_setup_completed BOOLEAN DEFAULT 0"))
-                db.session.commit()
-                print("Successfully migrated database: added business setup columns to users table.")
-            except Exception as e:
-                print("Failed to run users table database migration:", str(e))
+                db.session.execute(db.text(check_sql))
+            except Exception:
+                db.session.rollback()
+                try:
+                    # Handle multi-statement ALTERs (split by ;)
+                    statements = [s.strip() for s in alter_sql.split(';') if s.strip()]
+                    for stmt in statements:
+                        db.session.execute(db.text(stmt))
+                    db.session.commit()
+                    print(f"Migration: {success_msg}")
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"Migration failed ({success_msg}): {e}")
+
+        # ── Legacy column migrations ──────────────────────────────────────────
+        _add_column_if_missing(
+            "SELECT source_file FROM sales LIMIT 1",
+            "ALTER TABLE sales ADD COLUMN source_file VARCHAR(150) DEFAULT 'POS'",
+            "added source_file to sales"
+        )
+        _add_column_if_missing(
+            "SELECT phone FROM users LIMIT 1",
+            """ALTER TABLE users ADD COLUMN first_name VARCHAR(100) DEFAULT '';
+               ALTER TABLE users ADD COLUMN last_name VARCHAR(100) DEFAULT '';
+               ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT '';
+               ALTER TABLE users ADD COLUMN store_address VARCHAR(255) DEFAULT '';
+               ALTER TABLE users ADD COLUMN gst_number VARCHAR(50) DEFAULT '';
+               ALTER TABLE users ADD COLUMN store_type VARCHAR(100) DEFAULT '';
+               ALTER TABLE users ADD COLUMN is_setup_completed BOOLEAN DEFAULT 0""",
+            "added business setup columns to users"
+        )
+        _add_column_if_missing(
+            "SELECT business_setup_completed FROM users LIMIT 1",
+            "ALTER TABLE users ADD COLUMN business_setup_completed BOOLEAN DEFAULT 0",
+            "added business_setup_completed to users"
+        )
+
+        # ── Data isolation: user_id columns ───────────────────────────────────
+        _add_column_if_missing(
+            "SELECT user_id FROM customers LIMIT 1",
+            "ALTER TABLE customers ADD COLUMN user_id INTEGER REFERENCES users(id)",
+            "added user_id to customers"
+        )
+        _add_column_if_missing(
+            "SELECT user_id FROM products LIMIT 1",
+            "ALTER TABLE products ADD COLUMN user_id INTEGER REFERENCES users(id)",
+            "added user_id to products"
+        )
+        _add_column_if_missing(
+            "SELECT user_id FROM sales LIMIT 1",
+            "ALTER TABLE sales ADD COLUMN user_id INTEGER REFERENCES users(id)",
+            "added user_id to sales"
+        )
+        _add_column_if_missing(
+            "SELECT user_id FROM invoices LIMIT 1",
+            "ALTER TABLE invoices ADD COLUMN user_id INTEGER REFERENCES users(id)",
+            "added user_id to invoices"
+        )
+        _add_column_if_missing(
+            "SELECT user_id FROM categories LIMIT 1",
+            "ALTER TABLE categories ADD COLUMN user_id INTEGER REFERENCES users(id)",
+            "added user_id to categories"
+        )
+
         _seed_demo_data()
 
     return app

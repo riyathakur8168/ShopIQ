@@ -74,13 +74,16 @@ export default function POSCounter({ setActiveTab }) {
   };
 
   const updateCartQty = (id, delta) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = Math.max(1, item.cartQty + delta);
-        return { ...item, cartQty: newQty };
-      }
-      return item;
-    }));
+    setCart(prev => {
+      const updated = prev.map(item => {
+        if (item.id === id) {
+          return { ...item, cartQty: item.cartQty + delta };
+        }
+        return item;
+      });
+      // Auto-remove if qty reaches 0
+      return updated.filter(item => item.cartQty > 0);
+    });
   };
 
   const removeFromCart = (id) => {
@@ -309,37 +312,72 @@ export default function POSCounter({ setActiveTab }) {
                 const isLowStock = product.stock_quantity <= product.low_stock_threshold;
                 const inCart = cart.find(c => c.id === product.id);
                 return (
-                  <button
+                  <div
                     key={product.id}
-                    onClick={() => addToCart(product)}
-                    className={`relative text-left bg-white p-4 rounded-2xl border-2 transition-all duration-200 group flex flex-col justify-between h-32
+                    className={`relative text-left bg-white rounded-2xl border-2 transition-all duration-200 group flex flex-col cursor-pointer select-none
                       ${inCart ? 'border-primary-500 shadow-md bg-primary-50/30' : 'border-slate-100 shadow-sm hover:border-slate-300 hover:shadow-md'}`}
                   >
-                    <div>
+                    {/* Card body — clicking adds +1 */}
+                    <div
+                      className="flex-1 p-4 pb-2"
+                      onClick={() => addToCart(product)}
+                    >
                       <div className="flex justify-between items-start mb-1">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider truncate pr-2">
                           {product.category || 'General'}
                         </p>
-                        {inCart && (
-                          <span className="bg-primary-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shadow-sm">
-                            {inCart.cartQty} in cart
-                          </span>
-                        )}
                       </div>
                       <h4 className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 group-hover:text-primary-700 transition-colors">
                         {product.name}
                       </h4>
-                    </div>
-                    
-                    <div className="flex justify-between items-end mt-2">
-                      <p className={`text-xs font-bold ${isLowStock ? 'text-red-500' : 'text-emerald-600'}`}>
+                      <p className={`text-[10px] font-bold mt-1 ${isLowStock ? 'text-red-500' : 'text-emerald-600'}`}>
                         Stock: {product.stock_quantity}
                       </p>
-                      <p className="text-lg font-black text-slate-900">
-                        ₹{product.sell_price.toLocaleString()}
-                      </p>
                     </div>
-                  </button>
+
+                    {/* Card footer — price + qty controls */}
+                    <div className="px-3 pb-3">
+                      {inCart ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-black text-slate-900">
+                            ₹{product.sell_price.toLocaleString()}
+                          </span>
+                          {/* [-] qty [+] stepper */}
+                          <div className="flex items-center gap-1 bg-primary-600 rounded-lg px-1 py-0.5">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); updateCartQty(product.id, -1); }}
+                              className="w-6 h-6 flex items-center justify-center text-white hover:bg-primary-700 rounded-md transition-colors font-black text-base leading-none"
+                              title="Remove one"
+                            >
+                              −
+                            </button>
+                            <span className="text-white text-xs font-black min-w-[1.25rem] text-center">
+                              {inCart.cartQty}
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); updateCartQty(product.id, 1); }}
+                              className="w-6 h-6 flex items-center justify-center text-white hover:bg-primary-700 rounded-md transition-colors font-black text-base leading-none"
+                              title="Add one"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="flex items-center justify-between"
+                          onClick={() => addToCart(product)}
+                        >
+                          <span className="text-sm font-black text-slate-900">
+                            ₹{product.sell_price.toLocaleString()}
+                          </span>
+                          <span className="text-[10px] font-black text-primary-600 bg-primary-50 border border-primary-200 px-2 py-0.5 rounded-lg">
+                            Add +
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>

@@ -26,6 +26,7 @@ API.interceptors.response.use(
 export const login = (data) => API.post('/auth/login', data);
 export const signup = (data) => API.post('/auth/signup', data);
 export const setupBusiness = (data) => API.post('/auth/business-setup', data);
+export const getMe = () => API.get('/auth/me');
 
 // Products
 export const getProducts = (params) => API.get('/products/', { params });

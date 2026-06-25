@@ -18,6 +18,7 @@ class User(db.Model):
     gst_number = db.Column(db.String(50), default='')
     store_type = db.Column(db.String(100), default='')
     is_setup_completed = db.Column(db.Boolean, default=False)
+    business_setup_completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
@@ -38,7 +39,8 @@ class User(db.Model):
             'store_address': self.store_address,
             'gst_number': self.gst_number,
             'store_type': self.store_type,
-            'is_setup_completed': self.is_setup_completed,
+            'is_setup_completed': self.business_setup_completed,
+            'business_setup_completed': self.business_setup_completed,
             'role': self.role
         }
 
@@ -46,7 +48,9 @@ class User(db.Model):
 class Category(db.Model):
     __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    # user_id: NULL means global/shared; non-null means owned by that user
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     products = db.relationship('Product', backref='category_rel', lazy=True)
 
     def to_dict(self):
@@ -66,10 +70,12 @@ class Product(db.Model):
     sell_price = db.Column(db.Float, nullable=False)
     stock_quantity = db.Column(db.Integer, default=0)
     low_stock_threshold = db.Column(db.Integer, default=10)
+    # user_id: data isolation — each product belongs to one user/store
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship('Sale', backref='product', lazy=True, cascade="all, delete-orphan")
 
-    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10, category_id=None):
+    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10, category_id=None, user_id=None):
         self.name = name
         self.category = category
         self.buy_price = buy_price
@@ -77,6 +83,7 @@ class Product(db.Model):
         self.stock_quantity = stock_quantity
         self.low_stock_threshold = low_stock_threshold
         self.category_id = category_id
+        self.user_id = user_id
 
     def to_dict(self):
         return {
@@ -103,9 +110,11 @@ class Sale(db.Model):
     sale_date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     note = db.Column(db.String(255), default='')
     source_file = db.Column(db.String(150), default='POS', nullable=True)
+    # user_id: data isolation
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note='', source_file='POS'):
+    def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note='', source_file='POS', user_id=None):
         self.product_id = product_id
         self.quantity = quantity
         self.unit_price = unit_price
@@ -114,6 +123,7 @@ class Sale(db.Model):
             self.sale_date = sale_date
         self.note = note
         self.source_file = source_file
+        self.user_id = user_id
 
     def to_dict(self):
         return {
@@ -138,6 +148,8 @@ class Customer(db.Model):
     address = db.Column(db.String(255), default='')
     total_credit = db.Column(db.Float, default=0)
     total_paid = db.Column(db.Float, default=0)
+    # user_id: data isolation — each customer belongs to one store owner
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     credit_records = db.relationship('CreditRecord', backref='customer', lazy=True, cascade="all, delete-orphan")
 
@@ -151,6 +163,7 @@ class Customer(db.Model):
             'phone': self.phone, 'address': self.address,
             'total_credit': self.total_credit, 'total_paid': self.total_paid,
             'balance': self.balance,
+            # status: pending means they owe money, cleared means fully paid
             'status': 'cleared' if self.balance <= 0 else 'pending',
             'created_at': self.created_at.strftime('%Y-%m-%d')
         }
@@ -182,6 +195,8 @@ class Invoice(db.Model):
     items_json = db.Column(db.Text, nullable=False)  # JSON string of items
     total_amount = db.Column(db.Float, nullable=False)
     invoice_date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
+    # user_id: data isolation
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     @property
@@ -236,14 +251,28 @@ def resolve_product_category(product, session):
     
     normalized_name = normalize_category_name(cat_str)
     
-    cat = session.query(Category).filter(db.func.lower(Category.name) == normalized_name.lower()).first()
+    # Search for category scoped to this user first, then fall back to global
+    user_id = product.user_id
+    cat = None
+    if user_id:
+        cat = session.query(Category).filter(
+            db.func.lower(Category.name) == normalized_name.lower(),
+            Category.user_id == user_id
+        ).first()
     if not cat:
+        cat = session.query(Category).filter(
+            db.func.lower(Category.name) == normalized_name.lower(),
+            Category.user_id == None
+        ).first()
+    
+    if not cat:
+        # Check session.new for an in-flight Category with the same name and user
         for obj in session.new:
             if isinstance(obj, Category) and obj.name.lower() == normalized_name.lower():
                 cat = obj
                 break
         if not cat:
-            cat = Category(name=normalized_name)
+            cat = Category(name=normalized_name, user_id=user_id)
             session.add(cat)
             
     product.category_rel = cat

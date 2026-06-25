@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Sale, Product, SystemState, Customer
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -15,16 +15,21 @@ CACHE_TTL = 60
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/api/sales')
 
+def _uid():
+    return int(get_jwt_identity())
+
+
 @sales_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_sales():
+    uid = _uid()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     product_id = request.args.get('product_id', type=int)
 
-    query = Sale.query.options(joinedload(Sale.product))
+    query = Sale.query.filter_by(user_id=uid).options(joinedload(Sale.product))
     if start_date:
         try:
             query = query.filter(Sale.sale_date >= datetime.strptime(start_date, '%Y-%m-%d').date())
@@ -50,6 +55,7 @@ def get_sales():
 @sales_bp.route('/', methods=['POST'])
 @jwt_required()
 def add_sale():
+    uid = _uid()
     try:
         data = request.get_json()
         required = ['product_id', 'quantity', 'unit_price']
@@ -61,7 +67,8 @@ def add_sale():
         except (ValueError, TypeError):
             return jsonify({'message': 'Invalid product_id format'}), 400
 
-        product = db.session.query(Product).with_for_update().filter_by(id=product_id).first()
+        # Only allow selling products that belong to this user
+        product = db.session.query(Product).with_for_update().filter_by(id=product_id, user_id=uid).first()
         if not product:
             return jsonify({'message': 'Product not found'}), 404
 
@@ -96,7 +103,8 @@ def add_sale():
             unit_price=unit_price,
             total_amount=total,
             sale_date=s_date,
-            note=data.get('note', '')
+            note=data.get('note', ''),
+            user_id=uid
         )
         # Deduct stock
         product.stock_quantity -= qty
@@ -277,12 +285,13 @@ def upload_sales():
 @sales_bp.route('/<int:sale_id>', methods=['DELETE'])
 @jwt_required()
 def delete_sale(sale_id):
+    uid = _uid()
     try:
-        sale = Sale.query.get(sale_id)
+        sale = Sale.query.filter_by(id=sale_id, user_id=uid).first()
         if not sale:
             return jsonify({'message': 'Sale not found'}), 404
         # Restore stock
-        product = Product.query.get(sale.product_id)
+        product = Product.query.filter_by(id=sale.product_id, user_id=uid).first()
         if product:
             product.stock_quantity += sale.quantity
         db.session.delete(sale)
@@ -299,18 +308,19 @@ def delete_sale(sale_id):
 @sales_bp.route('/analytics', methods=['GET'])
 @jwt_required()
 def get_analytics():
+    uid = _uid()
     try:
         source = request.args.get('source', '')
-        cache_key = f"analytics_{source}"
+        cache_key = f"analytics_{uid}_{source}"
         now = time.time()
         if cache_key in analytics_cache and now - analytics_cache[cache_key]['timestamp'] < CACHE_TTL:
             return jsonify(analytics_cache[cache_key]['data']), 200
 
         today = date.today()
-        
+
         # Get target source parameter
         source = request.args.get('source')
-        
+
         # Retrieve the last uploaded CSV filename from metadata
         last_filename = "Active Catalog"
         try:
@@ -320,8 +330,8 @@ def get_analytics():
         except Exception:
             pass
 
-        # Query all unique uploaded CSV filenames (excluding POS)
-        unique_sources = db.session.query(Sale.source_file).distinct().all()
+        # Query all unique uploaded CSV filenames for this user (excluding POS)
+        unique_sources = db.session.query(Sale.source_file).filter_by(user_id=uid).distinct().all()
         uploaded_files = [r[0] for r in unique_sources if r[0] and r[0] != 'POS']
 
         # Determine default source if not provided
@@ -331,14 +341,16 @@ def get_analytics():
             elif uploaded_files:
                 source = uploaded_files[0]
             else:
-                source = 'combined' # Fallback to combined/all if no last uploaded file
+                source = 'combined'  # Fallback to combined/all if no last uploaded file
 
-        # Build dynamic queries based on selected source
+        # Build dynamic queries scoped to this user + source
         def apply_source_filter(query_obj):
+            # Always scope to current user first
+            query_obj = query_obj.filter(Sale.user_id == uid)
             if source == 'POS':
                 return query_obj.filter(Sale.source_file == 'POS')
             elif source == 'combined':
-                return query_obj # No filter, combined all
+                return query_obj
             else:
                 return query_obj.filter(Sale.source_file == source)
 
@@ -391,8 +403,9 @@ def get_analytics():
             func.sum(Sale.quantity * Sale.unit_price).desc()
         ).limit(5).all()
 
-        # Low stock count
+        # Low stock count — scoped to this user
         low_stock_count = Product.query.filter(
+            Product.user_id == uid,
             Product.stock_quantity <= Product.low_stock_threshold
         ).count()
 

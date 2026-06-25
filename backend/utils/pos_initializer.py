@@ -88,54 +88,70 @@ STORE_TYPE_ALIASES = {
     'Garment Store': 'Clothing Store'
 }
 
-def initialize_pos_for_business(store_type):
+def initialize_pos_for_business(store_type, user_id=None):
     """
-    Clears all existing products, categories, sales, invoices, and credit records.
-    Then dynamically generates the catalog structure and sample products for the store type.
+    Clears existing products, categories, sales, invoices, and credit records
+    for the given user, then generates the catalog for the selected store type.
+    All created objects are owned by user_id.
     """
     from models import Category, Product, Sale, Invoice, CreditRecord, Customer
-    
-    # 1. Clear old transactions & credit state to avoid referential integrity or dirty metrics
-    db.session.query(Sale).delete()
-    db.session.query(Invoice).delete()
-    db.session.query(CreditRecord).delete()
-    
-    for cust in db.session.query(Customer).all():
-        cust.total_credit = 0.0
-        cust.total_paid = 0.0
-        
-    db.session.query(Product).delete()
-    db.session.query(Category).delete()
+
+    # 1. Clear only THIS user's data
+    if user_id:
+        db.session.query(Sale).filter_by(user_id=user_id).delete()
+        db.session.query(Invoice).filter_by(user_id=user_id).delete()
+
+        # Reset credit records for customers belonging to this user
+        customers = db.session.query(Customer).filter_by(user_id=user_id).all()
+        for cust in customers:
+            for rec in cust.credit_records:
+                db.session.delete(rec)
+            cust.total_credit = 0.0
+            cust.total_paid = 0.0
+
+        db.session.query(Product).filter_by(user_id=user_id).delete()
+        db.session.query(Category).filter_by(user_id=user_id).delete()
+    else:
+        # Fallback: global clear (legacy path, should not be hit in normal flow)
+        db.session.query(Sale).delete()
+        db.session.query(Invoice).delete()
+        db.session.query(CreditRecord).delete()
+        for cust in db.session.query(Customer).all():
+            cust.total_credit = 0.0
+            cust.total_paid = 0.0
+        db.session.query(Product).delete()
+        db.session.query(Category).delete()
+
     db.session.commit()
-    
+
     normalized_type = store_type.strip() if store_type else 'Other'
     mapped_type = STORE_TYPE_ALIASES.get(normalized_type, normalized_type)
-    
+
     template = BUSINESS_TEMPLATES.get(mapped_type)
-    
-    # Fallback option A: Blank store with no products if type is unsupported or selected "Other"
+
+    # Fallback: blank store with just "General" category
     if not template or mapped_type == 'Other':
-        general_cat = Category(name='General')
+        general_cat = Category(name='General', user_id=user_id)
         db.session.add(general_cat)
         db.session.commit()
         return
-        
-    # 2. Add categories for the template
+
+    # 2. Add categories for the template (scoped to this user)
     category_map = {}
     for cat_name in template['categories']:
-        cat = Category(name=cat_name)
+        cat = Category(name=cat_name, user_id=user_id)
         db.session.add(cat)
         category_map[cat_name] = cat
-        
-    # Ensure a "General" category always exists as fallback
+
+    # Ensure "General" fallback category exists
     if 'General' not in category_map:
-        general_cat = Category(name='General')
+        general_cat = Category(name='General', user_id=user_id)
         db.session.add(general_cat)
         category_map['General'] = general_cat
-        
+
     db.session.commit()
-    
-    # 3. Add sample products for the template
+
+    # 3. Add sample products for the template (scoped to this user)
     for prod_info in template['products']:
         cat_obj = category_map.get(prod_info['category'], category_map['General'])
         new_prod = Product(
@@ -145,8 +161,10 @@ def initialize_pos_for_business(store_type):
             sell_price=prod_info['sell_price'],
             stock_quantity=prod_info['stock_quantity'],
             low_stock_threshold=prod_info['low_stock_threshold'],
-            category_id=cat_obj.id
+            category_id=cat_obj.id,
+            user_id=user_id
         )
         db.session.add(new_prod)
-        
+
     db.session.commit()
+

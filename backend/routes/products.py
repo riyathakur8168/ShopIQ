@@ -1,22 +1,31 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Product, Sale
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 import os
 import sys
 
 products_bp = Blueprint('products', __name__, url_prefix='/api/products')
 
+def _uid():
+    return int(get_jwt_identity())
+
 @products_bp.route('/categories', methods=['GET'])
 @jwt_required()
 def get_categories():
+    uid = _uid()
     from models import Category
-    categories = Category.query.order_by(Category.name.asc()).all()
+    # Return categories owned by this user, ordered by name
+    categories = Category.query.filter_by(user_id=uid).order_by(Category.name.asc()).all()
+    # Fall back to unowned categories if none exist yet (e.g. first login)
+    if not categories:
+        categories = Category.query.filter(Category.user_id == None).order_by(Category.name.asc()).all()
     return jsonify([cat.to_dict() for cat in categories]), 200
 
 @products_bp.route('/categories', methods=['POST'])
 @jwt_required()
 def add_category():
+    uid = _uid()
     data = request.get_json()
     if not data or not data.get('name'):
         return jsonify({'message': 'Missing category name'}), 400
@@ -25,11 +34,14 @@ def add_category():
     normalized_name = name.title() if name.lower() != 'general' else 'General'
 
     from models import Category
-    existing = Category.query.filter(db.func.lower(Category.name) == normalized_name.lower()).first()
+    existing = Category.query.filter(
+        db.func.lower(Category.name) == normalized_name.lower(),
+        Category.user_id == uid
+    ).first()
     if existing:
         return jsonify({'message': 'Category already exists', 'category': existing.to_dict()}), 400
 
-    new_cat = Category(name=normalized_name)
+    new_cat = Category(name=normalized_name, user_id=uid)
     db.session.add(new_cat)
     db.session.commit()
 
@@ -38,8 +50,9 @@ def add_category():
 @products_bp.route('/categories/<int:category_id>', methods=['PUT'])
 @jwt_required()
 def rename_category(category_id):
+    uid = _uid()
     from models import Category
-    cat = Category.query.get(category_id)
+    cat = Category.query.filter_by(id=category_id, user_id=uid).first()
     if not cat:
         return jsonify({'message': 'Category not found'}), 404
 
@@ -50,12 +63,14 @@ def rename_category(category_id):
     new_name = data['name'].strip()
     normalized_name = new_name.title() if new_name.lower() != 'general' else 'General'
 
-    existing = Category.query.filter(db.func.lower(Category.name) == normalized_name.lower()).first()
+    existing = Category.query.filter(
+        db.func.lower(Category.name) == normalized_name.lower(),
+        Category.user_id == uid
+    ).first()
     if existing and existing.id != category_id:
         return jsonify({'message': 'Another category with this name already exists'}), 400
 
     cat.name = normalized_name
-
     for p in cat.products:
         p.category = normalized_name
 
@@ -65,17 +80,21 @@ def rename_category(category_id):
 @products_bp.route('/categories/<int:category_id>', methods=['DELETE'])
 @jwt_required()
 def delete_category(category_id):
+    uid = _uid()
     from models import Category
-    cat = Category.query.get(category_id)
+    cat = Category.query.filter_by(id=category_id, user_id=uid).first()
     if not cat:
         return jsonify({'message': 'Category not found'}), 404
 
     if cat.name.lower() == 'general':
         return jsonify({'message': 'Cannot delete General category'}), 400
 
-    general_cat = Category.query.filter(db.func.lower(Category.name) == 'general').first()
+    general_cat = Category.query.filter(
+        db.func.lower(Category.name) == 'general',
+        Category.user_id == uid
+    ).first()
     if not general_cat:
-        general_cat = Category(name='General')
+        general_cat = Category(name='General', user_id=uid)
         db.session.add(general_cat)
         db.session.commit()
 
@@ -90,20 +109,20 @@ def delete_category(category_id):
 @products_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_products():
+    uid = _uid()
     page = request.args.get('page', type=int)
     per_page = request.args.get('per_page', type=int)
     search = request.args.get('search', '')
     category = request.args.get('category', '')
-    
-    query = Product.query
+
+    query = Product.query.filter_by(user_id=uid)
     if search:
         safe_search = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         query = query.filter(Product.name.ilike(f'%{safe_search}%', escape='\\'))
     if category and category != 'All':
-        # Match case-insensitively using relationship or string field
         from models import Category
         query = query.join(Category, Product.category_id == Category.id).filter(db.func.lower(Category.name) == category.lower())
-        
+
     query = query.order_by(Product.id.desc())
 
     if page and per_page:
@@ -113,7 +132,7 @@ def get_products():
             'total': paginated.total,
             'pages': paginated.pages
         }), 200
-        
+
     products = query.limit(1000).all()
     return jsonify([product.to_dict() for product in products]), 200
 
@@ -121,7 +140,11 @@ def get_products():
 @products_bp.route('/notifications', methods=['GET'])
 @jwt_required()
 def get_notifications():
-    products = Product.query.filter(Product.stock_quantity <= Product.low_stock_threshold).all()
+    uid = _uid()
+    products = Product.query.filter(
+        Product.user_id == uid,
+        Product.stock_quantity <= Product.low_stock_threshold
+    ).all()
     notifications = []
     for p in products:
         if p.stock_quantity == 0:
@@ -165,6 +188,7 @@ def get_notifications():
 @products_bp.route('/', methods=['POST'])
 @jwt_required()
 def add_product():
+    uid = _uid()
     data = request.get_json()
     if not data or not data.get('name') or not data.get('buy_price') or not data.get('sell_price'):
         return jsonify({'message': 'Missing required fields'}), 400
@@ -175,9 +199,10 @@ def add_product():
         buy_price=float(data['buy_price']),
         sell_price=float(data['sell_price']),
         stock_quantity=int(data.get('stock_quantity', 0)),
-        low_stock_threshold=int(data.get('low_stock_threshold', 10))
+        low_stock_threshold=int(data.get('low_stock_threshold', 10)),
+        user_id=uid
     )
-    
+
     db.session.add(new_product)
     db.session.commit()
 
@@ -186,7 +211,8 @@ def add_product():
 @products_bp.route('/<int:product_id>', methods=['PUT'])
 @jwt_required()
 def update_product(product_id):
-    product = Product.query.get(product_id)
+    uid = _uid()
+    product = Product.query.filter_by(id=product_id, user_id=uid).first()
     if not product:
         return jsonify({'message': 'Product not found'}), 404
 
@@ -201,10 +227,12 @@ def update_product(product_id):
     db.session.commit()
     return jsonify({'message': 'Product updated successfully', 'product': product.to_dict()}), 200
 
+
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
 @jwt_required()
 def delete_product(product_id):
-    product = Product.query.get(product_id)
+    uid = _uid()
+    product = Product.query.filter_by(id=product_id, user_id=uid).first()
     if not product:
         return jsonify({'message': 'Product not found'}), 404
 
