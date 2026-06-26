@@ -3,79 +3,53 @@ from extensions import db
 # Templates for each store type containing their categories and sample products
 BUSINESS_TEMPLATES = {
     'Grocery Store': {
-        'categories': ['Fruits & Vegetables', 'Dairy', 'Beverages', 'Snacks', 'Household Essentials'],
+        'categories': ['Dairy', 'Beverages', 'Snacks', 'Food', 'Household'],
         'products': [
-            {'name': 'Milk', 'category': 'Dairy', 'buy_price': 30.0, 'sell_price': 40.0, 'stock_quantity': 80, 'low_stock_threshold': 10},
+            {'name': 'Amul Milk', 'category': 'Dairy', 'buy_price': 50.0, 'sell_price': 60.0, 'stock_quantity': 80, 'low_stock_threshold': 10},
             {'name': 'Bread', 'category': 'Snacks', 'buy_price': 20.0, 'sell_price': 25.0, 'stock_quantity': 50, 'low_stock_threshold': 10},
-            {'name': 'Rice', 'category': 'Household Essentials', 'buy_price': 50.0, 'sell_price': 60.0, 'stock_quantity': 100, 'low_stock_threshold': 15},
-            {'name': 'Sugar', 'category': 'Household Essentials', 'buy_price': 35.0, 'sell_price': 40.0, 'stock_quantity': 100, 'low_stock_threshold': 15},
-            {'name': 'Soft Drinks', 'category': 'Beverages', 'buy_price': 15.0, 'sell_price': 20.0, 'stock_quantity': 60, 'low_stock_threshold': 10}
+            {'name': 'Sugar', 'category': 'Food', 'buy_price': 35.0, 'sell_price': 40.0, 'stock_quantity': 100, 'low_stock_threshold': 15},
+            {'name': 'Rice', 'category': 'Food', 'buy_price': 50.0, 'sell_price': 60.0, 'stock_quantity': 100, 'low_stock_threshold': 15},
         ]
     },
-    'Department Store': {
-        'categories': ['Clothing', 'Footwear', 'Home & Kitchen', 'Personal Care', 'Accessories'],
+    'Electrical Store': {
+        'categories': ['Bulbs', 'Switches', 'Wires', 'Fans', 'Tools', 'Accessories'],
         'products': [
-            {'name': 'T-Shirt', 'category': 'Clothing', 'buy_price': 250.0, 'sell_price': 399.0, 'stock_quantity': 40, 'low_stock_threshold': 5},
-            {'name': 'Jeans', 'category': 'Clothing', 'buy_price': 600.0, 'sell_price': 999.0, 'stock_quantity': 30, 'low_stock_threshold': 5},
-            {'name': 'Shoes', 'category': 'Footwear', 'buy_price': 800.0, 'sell_price': 1499.0, 'stock_quantity': 20, 'low_stock_threshold': 3},
-            {'name': 'Backpack', 'category': 'Accessories', 'buy_price': 400.0, 'sell_price': 699.0, 'stock_quantity': 25, 'low_stock_threshold': 5},
-            {'name': 'Water Bottle', 'category': 'Home & Kitchen', 'buy_price': 80.0, 'sell_price': 149.0, 'stock_quantity': 50, 'low_stock_threshold': 10}
+            {'name': 'LED Bulb', 'category': 'Bulbs', 'buy_price': 80.0, 'sell_price': 120.0, 'stock_quantity': 40, 'low_stock_threshold': 5},
+            {'name': 'Switch', 'category': 'Switches', 'buy_price': 30.0, 'sell_price': 50.0, 'stock_quantity': 100, 'low_stock_threshold': 10},
+            {'name': 'Wire', 'category': 'Wires', 'buy_price': 400.0, 'sell_price': 550.0, 'stock_quantity': 20, 'low_stock_threshold': 5},
         ]
     },
-    'Clothing Store': {
-        'categories': ['Men', 'Women', 'Kids', 'Accessories'],
+    'Mobile Shop': {
+        'categories': ['Smartphones', 'Android Phones', 'iPhones', 'Chargers', 'Earphones', 'Smart Watches'],
         'products': [
-            {'name': 'Shirt', 'category': 'Men', 'buy_price': 400.0, 'sell_price': 699.0, 'stock_quantity': 35, 'low_stock_threshold': 5},
-            {'name': 'Jeans', 'category': 'Men', 'buy_price': 600.0, 'sell_price': 999.0, 'stock_quantity': 30, 'low_stock_threshold': 5},
-            {'name': 'Dress', 'category': 'Women', 'buy_price': 700.0, 'sell_price': 1299.0, 'stock_quantity': 15, 'low_stock_threshold': 3},
-            {'name': 'Jacket', 'category': 'Women', 'buy_price': 1000.0, 'sell_price': 1899.0, 'stock_quantity': 10, 'low_stock_threshold': 2},
-            {'name': 'Cap', 'category': 'Accessories', 'buy_price': 100.0, 'sell_price': 199.0, 'stock_quantity': 40, 'low_stock_threshold': 8}
-        ]
-    },
-    'Electronics Store': {
-        'categories': ['Mobile Phones', 'Accessories', 'Computers', 'Audio Devices', 'Smart Gadgets'],
-        'products': [
-            {'name': 'Smartphone', 'category': 'Mobile Phones', 'buy_price': 12000.0, 'sell_price': 14999.0, 'stock_quantity': 15, 'low_stock_threshold': 3},
-            {'name': 'Earbuds', 'category': 'Audio Devices', 'buy_price': 999.0, 'sell_price': 1499.0, 'stock_quantity': 40, 'low_stock_threshold': 8},
-            {'name': 'Laptop', 'category': 'Computers', 'buy_price': 35000.0, 'sell_price': 42999.0, 'stock_quantity': 8, 'low_stock_threshold': 2},
-            {'name': 'Power Bank', 'category': 'Accessories', 'buy_price': 800.0, 'sell_price': 1299.0, 'stock_quantity': 30, 'low_stock_threshold': 5},
-            {'name': 'Smart Watch', 'category': 'Smart Gadgets', 'buy_price': 1800.0, 'sell_price': 2999.0, 'stock_quantity': 25, 'low_stock_threshold': 5}
-        ]
-    },
-    'Pharmacy': {
-        'categories': ['Medicines', 'Personal Care', 'Health Supplements', 'Medical Devices'],
-        'products': [
-            {'name': 'Paracetamol', 'category': 'Medicines', 'buy_price': 12.0, 'sell_price': 18.0, 'stock_quantity': 200, 'low_stock_threshold': 30},
-            {'name': 'Vitamin Tablets', 'category': 'Health Supplements', 'buy_price': 110.0, 'sell_price': 150.0, 'stock_quantity': 80, 'low_stock_threshold': 10},
-            {'name': 'Bandages', 'category': 'Medical Devices', 'buy_price': 25.0, 'sell_price': 40.0, 'stock_quantity': 150, 'low_stock_threshold': 20},
-            {'name': 'Hand Sanitizer', 'category': 'Personal Care', 'buy_price': 45.0, 'sell_price': 60.0, 'stock_quantity': 100, 'low_stock_threshold': 15}
+            {'name': 'Android Phone', 'category': 'Android Phones', 'buy_price': 12000.0, 'sell_price': 14999.0, 'stock_quantity': 15, 'low_stock_threshold': 3},
+            {'name': 'iPhone', 'category': 'iPhones', 'buy_price': 60000.0, 'sell_price': 69999.0, 'stock_quantity': 5, 'low_stock_threshold': 2},
+            {'name': 'Charger', 'category': 'Chargers', 'buy_price': 300.0, 'sell_price': 499.0, 'stock_quantity': 40, 'low_stock_threshold': 8},
+            {'name': 'Earphones', 'category': 'Earphones', 'buy_price': 800.0, 'sell_price': 1299.0, 'stock_quantity': 30, 'low_stock_threshold': 5},
         ]
     },
     'Hardware Store': {
         'categories': ['Tools', 'Electrical', 'Plumbing', 'Construction Materials'],
         'products': [
             {'name': 'Hammer', 'category': 'Tools', 'buy_price': 120.0, 'sell_price': 199.0, 'stock_quantity': 30, 'low_stock_threshold': 5},
-            {'name': 'Screwdriver', 'category': 'Tools', 'buy_price': 40.0, 'sell_price': 69.0, 'stock_quantity': 80, 'low_stock_threshold': 10},
-            {'name': 'Drill Machine', 'category': 'Tools', 'buy_price': 1500.0, 'sell_price': 2499.0, 'stock_quantity': 12, 'low_stock_threshold': 3},
-            {'name': 'PVC Pipe', 'category': 'Plumbing', 'buy_price': 70.0, 'sell_price': 110.0, 'stock_quantity': 60, 'low_stock_threshold': 10}
         ]
     },
-    'Stationery Store': {
-        'categories': ['Writing Supplies', 'School Supplies', 'Office Supplies', 'Art Materials'],
+    'Medical Store': {
+        'categories': ['Tablets', 'Syrups', 'First Aid', 'Personal Care'],
         'products': [
-            {'name': 'Notebook', 'category': 'School Supplies', 'buy_price': 30.0, 'sell_price': 45.0, 'stock_quantity': 120, 'low_stock_threshold': 20},
-            {'name': 'Pen', 'category': 'Writing Supplies', 'buy_price': 5.0, 'sell_price': 10.0, 'stock_quantity': 300, 'low_stock_threshold': 50},
-            {'name': 'Marker', 'category': 'Art Materials', 'buy_price': 15.0, 'sell_price': 25.0, 'stock_quantity': 80, 'low_stock_threshold': 15},
-            {'name': 'Calculator', 'category': 'Office Supplies', 'buy_price': 350.0, 'sell_price': 499.0, 'stock_quantity': 20, 'low_stock_threshold': 4}
+            {'name': 'Paracetamol', 'category': 'Tablets', 'buy_price': 12.0, 'sell_price': 18.0, 'stock_quantity': 200, 'low_stock_threshold': 30},
         ]
     },
     'Cosmetics Store': {
         'categories': ['Skincare', 'Makeup', 'Hair Care', 'Personal Care'],
         'products': [
             {'name': 'Face Wash', 'category': 'Skincare', 'buy_price': 90.0, 'sell_price': 149.0, 'stock_quantity': 60, 'low_stock_threshold': 10},
-            {'name': 'Shampoo', 'category': 'Hair Care', 'buy_price': 120.0, 'sell_price': 180.0, 'stock_quantity': 50, 'low_stock_threshold': 8},
-            {'name': 'Lipstick', 'category': 'Makeup', 'buy_price': 150.0, 'sell_price': 299.0, 'stock_quantity': 45, 'low_stock_threshold': 5},
-            {'name': 'Moisturizer', 'category': 'Skincare', 'buy_price': 180.0, 'sell_price': 249.0, 'stock_quantity': 40, 'low_stock_threshold': 8}
+        ]
+    },
+    'Garment Store': {
+        'categories': ["Men's Wear", "Women's Wear", "Kids' Wear", 'Accessories', 'Footwear'],
+        'products': [
+            {'name': 'T-Shirt', 'category': "Men's Wear", 'buy_price': 250.0, 'sell_price': 399.0, 'stock_quantity': 40, 'low_stock_threshold': 5},
         ]
     }
 }

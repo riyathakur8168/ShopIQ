@@ -96,6 +96,49 @@ def create_app(config_class=Config):
             "ALTER TABLE categories ADD COLUMN user_id INTEGER REFERENCES users(id)",
             "added user_id to categories"
         )
+        
+        _add_column_if_missing(
+            "SELECT products_purchased FROM credit_records LIMIT 1",
+            "ALTER TABLE credit_records ADD COLUMN products_purchased VARCHAR(255)",
+            "added products_purchased to credit_records"
+        )
+        _add_column_if_missing(
+            "SELECT quantity FROM credit_records LIMIT 1",
+            "ALTER TABLE credit_records ADD COLUMN quantity INTEGER",
+            "added quantity to credit_records"
+        )
+        _add_column_if_missing(
+            "SELECT bill_amount FROM credit_records LIMIT 1",
+            "ALTER TABLE credit_records ADD COLUMN bill_amount FLOAT",
+            "added bill_amount to credit_records"
+        )
+        
+        _add_column_if_missing(
+            "SELECT bill_number FROM credit_records LIMIT 1",
+            "ALTER TABLE credit_records ADD COLUMN bill_number VARCHAR(50)",
+            "added bill_number to credit_records"
+        )
+
+        try:
+            # Legacy DBs created by SQLAlchemy may have a UNIQUE constraint on categories.name
+            # SQLite does not support DROP CONSTRAINT, so we safely recreate the table.
+            result = db.session.execute(db.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'")).scalar()
+            if result and 'UNIQUE' in result.upper():
+                db.session.execute(db.text("""
+                    CREATE TABLE categories_new (
+                        id INTEGER PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        user_id INTEGER REFERENCES users(id)
+                    )
+                """))
+                db.session.execute(db.text("INSERT INTO categories_new (id, name, user_id) SELECT id, name, user_id FROM categories"))
+                db.session.execute(db.text("DROP TABLE categories"))
+                db.session.execute(db.text("ALTER TABLE categories_new RENAME TO categories"))
+                db.session.commit()
+                print("Migration: Recreated categories table to remove UNIQUE constraint")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Migration failed (categories recreate): {e}")
 
         _seed_demo_data()
 

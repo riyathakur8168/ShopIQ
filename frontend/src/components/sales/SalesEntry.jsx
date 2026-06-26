@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addSale, getSalesAnalytics, getSales, addProduct } from '../../services/api';
+import { getProducts, addSale, getSalesAnalytics, getSales, addProduct, getCustomers, addCredit } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 
 export default function SalesEntry() {
   const [products, setProducts] = useState([]);
   const [history, setHistory] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState(null);
@@ -13,15 +14,25 @@ export default function SalesEntry() {
   const [isNewProduct, setIsNewProduct] = useState(false);
   const [newProductForm, setNewProductForm] = useState({ name: '', buy_price: '', sell_price: '', stock_quantity: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  
   const { toast } = useToast();
 
   const load = async () => {
     setLoading(true);
     try {
-      const [pRes, aRes, sRes] = await Promise.all([getProducts(), getSalesAnalytics(), getSales({ per_page: 20 })]);
+      const [pRes, aRes, sRes, cRes] = await Promise.all([
+        getProducts(), 
+        getSalesAnalytics(), 
+        getSales({ per_page: 20 }),
+        getCustomers({ per_page: 1000 })
+      ]);
       setProducts(pRes.data);
       setStats(aRes.data.today);
       setHistory(sRes.data.sales || []);
+      setCustomers(cRes.data.items || cRes.data || []);
     } catch { toast('Failed to load data', 'error'); }
     finally { setLoading(false); }
   };
@@ -93,6 +104,7 @@ export default function SalesEntry() {
 
   const handleSubmit = async () => {
     if (cart.length === 0) return toast('Cart is empty', 'warning');
+    if (paymentMethod === 'Udhar' && !selectedCustomerId) return toast('Select a customer for Udhar', 'warning');
     
     setSubmitting(true);
     let successCount = 0;
@@ -120,13 +132,39 @@ export default function SalesEntry() {
           product_id: finalProductId,
           quantity: item.quantity,
           unit_price: item.sell_price,
-          note: ''
+          note: paymentMethod === 'Udhar' ? `Udhar Sale` : ''
         });
         successCount++;
       }
       
+      const cartTotal = cart.reduce((sum, item) => sum + (item.sell_price * item.quantity), 0);
+      
+      // If Udhar, record the ledger entry
+      if (paymentMethod === 'Udhar') {
+        const productsJSON = JSON.stringify(cart.map(i => ({
+          name: i.name,
+          quantity: i.quantity,
+          unit_price: i.sell_price,
+          total: i.sell_price * i.quantity
+        })));
+        
+        const billNumber = Math.floor(Date.now() / 1000).toString();
+        const totalQty = cart.reduce((sum, i) => sum + i.quantity, 0);
+        await addCredit(selectedCustomerId, {
+          amount: cartTotal,
+          note: 'POS Udhar Sale',
+          products_purchased: productsJSON,
+          quantity: totalQty,
+          bill_amount: cartTotal,
+          bill_number: billNumber,
+          date: new Date().toISOString().split('T')[0]
+        });
+      }
+      
       toast(`Successfully completed sale of ${successCount} items!`, 'success');
       setCart([]);
+      setSelectedCustomerId('');
+      setPaymentMethod('Cash');
       load();
       window.dispatchEvent(new Event('update-notifications'));
     } catch (err) {
@@ -270,7 +308,45 @@ export default function SalesEntry() {
 
         {/* Checkout Footer */}
         <div className="pt-5 mt-4 border-t-2 border-dashed border-slate-200 shrink-0">
-          <div className="flex justify-between items-end mb-4">
+          
+          <div className="flex flex-col gap-3 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Payment Method</span>
+              <div className="flex bg-slate-200 rounded-lg p-0.5">
+                {['Cash', 'Udhar'].map(method => (
+                  <button
+                    key={method}
+                    onClick={() => { setPaymentMethod(method); if(method === 'Cash') setSelectedCustomerId(''); }}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                      paymentMethod === method 
+                        ? 'bg-white text-slate-900 shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {paymentMethod === 'Udhar' && (
+              <div className="animate-fade-in pt-1">
+                <select 
+                  className="input w-full py-2 text-sm border-slate-300"
+                  value={selectedCustomerId}
+                  onChange={(e) => setSelectedCustomerId(e.target.value)}
+                >
+                  <option value="">-- Select Udhar Customer --</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.phone || 'No phone'}) - Bal: ₹{c.balance}</option>
+                  ))}
+                </select>
+                {customers.length === 0 && <p className="text-[10px] text-red-500 mt-1 mt-1">No customers found. Add a customer in the Customers tab first.</p>}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-end mb-4 px-1">
             <span className="text-slate-500 font-bold uppercase tracking-wider text-sm">Grand Total</span>
             <span className="text-4xl font-black text-slate-900 tracking-tight">₹{cartTotal.toLocaleString()}</span>
           </div>

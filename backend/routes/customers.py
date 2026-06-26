@@ -62,24 +62,22 @@ def add_customer():
 def get_customer(customer_id):
     uid = _current_user_id()
     customer = Customer.query.filter_by(id=customer_id, user_id=uid).first_or_404()
-
-    # Build history with running balance
     records = CreditRecord.query.filter_by(customer_id=customer_id).order_by(CreditRecord.date.asc(), CreditRecord.created_at.asc()).all()
-
-    running_balance = 0.0
+    
     history = []
+    running_balance = 0
     for r in records:
         if r.record_type == 'credit':
             running_balance += r.amount
         else:
             running_balance -= r.amount
-        entry = r.to_dict()
-        entry['running_balance'] = round(running_balance, 2)
-        history.append(entry)
-
+        d = r.to_dict()
+        d['running_balance'] = running_balance
+        history.append(d)
+        
+    history.reverse()
     data = customer.to_dict()
-    # Return history in reverse-chronological order for display
-    data['history'] = list(reversed(history))
+    data['history'] = history
     return jsonify(data), 200
 
 
@@ -106,6 +104,17 @@ def delete_customer(customer_id):
     return jsonify({'message': 'Customer deleted'}), 200
 
 
+def _recalculate_balances(customer_id):
+    customer = Customer.query.get(customer_id)
+    if not customer: return
+    credit = db.session.query(db.func.coalesce(db.func.sum(CreditRecord.amount), 0)).filter_by(customer_id=customer_id, record_type='credit').scalar()
+    paid = db.session.query(db.func.coalesce(db.func.sum(CreditRecord.amount), 0)).filter_by(customer_id=customer_id, record_type='payment').scalar()
+    customer.total_credit = float(credit)
+    customer.total_paid = float(paid)
+    db.session.commit()
+    return customer
+
+
 @customers_bp.route('/<int:customer_id>/credit', methods=['POST'])
 @jwt_required()
 def add_credit(customer_id):
@@ -123,11 +132,17 @@ def add_credit(customer_id):
         record_type='credit',
         amount=amount,
         note=data.get('note', ''),
+        products_purchased=data.get('products_purchased', ''),
+        quantity=data.get('quantity') if data.get('quantity') else None,
+        bill_amount=data.get('bill_amount') if data.get('bill_amount') else None,
+        bill_number=data.get('bill_number') if data.get('bill_number') else None,
         date=datetime.strptime(data.get('date', date.today().strftime('%Y-%m-%d')), '%Y-%m-%d').date()
     )
-    customer.total_credit += amount
     db.session.add(record)
     db.session.commit()
+    
+    # Recalculate balances cumulatively from transaction history
+    customer = _recalculate_balances(customer_id)
     return jsonify({'message': 'Credit added', 'customer': customer.to_dict()}), 201
 
 
@@ -152,7 +167,9 @@ def record_payment(customer_id):
         note=data.get('note', ''),
         date=datetime.strptime(data.get('date', date.today().strftime('%Y-%m-%d')), '%Y-%m-%d').date()
     )
-    customer.total_paid += amount
     db.session.add(record)
     db.session.commit()
+    
+    # Recalculate balances cumulatively from transaction history
+    customer = _recalculate_balances(customer_id)
     return jsonify({'message': 'Payment recorded', 'customer': customer.to_dict()}), 201

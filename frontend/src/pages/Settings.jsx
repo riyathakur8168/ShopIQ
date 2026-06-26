@@ -8,11 +8,11 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('Profile');
   
   const [profile, setProfile] = useState({
-    shopName: 'ShopIQ Supermart',
-    ownerName: user?.name || 'Owner',
+    shopName: user?.shop_name || '',
+    ownerName: user?.name || '',
     email: user?.email || '',
-    phone: '+91 9876543210',
-    address: '123 Market Street, New Delhi',
+    phone: user?.phone || '',
+    address: user?.store_address || '',
   });
 
   const [saving, setSaving] = useState(false);
@@ -55,11 +55,11 @@ export default function Settings() {
         <div className="flex-1">
           {activeTab === 'Profile' && (
             <div className="card p-6 shadow-sm border-slate-200 animate-fade-in">
-              <h3 className="text-base font-bold text-slate-900 mb-6">Shop Profile</h3>
+              <h3 className="text-base font-bold text-slate-900 mb-6">Store Information</h3>
               
               <div className="flex items-center gap-6 mb-8">
                 <div className="w-20 h-20 rounded-2xl bg-gradient-brand text-white flex items-center justify-center text-2xl font-black shadow-sm">
-                  {profile.shopName[0].toUpperCase()}
+                  {profile.shopName ? profile.shopName[0].toUpperCase() : 'S'}
                 </div>
                 <div>
                   <button className="btn-secondary text-xs font-bold shadow-sm">Change Logo</button>
@@ -70,7 +70,7 @@ export default function Settings() {
               <form onSubmit={handleSave} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="input-label">Shop Name</label>
+                    <label className="input-label">Store Name</label>
                     <input className="input" value={profile.shopName} onChange={e => setProfile({...profile, shopName: e.target.value})} required />
                   </div>
                   <div>
@@ -79,15 +79,38 @@ export default function Settings() {
                   </div>
                   <div>
                     <label className="input-label">Email Address</label>
-                    <input type="email" className="input" value={profile.email} onChange={e => setProfile({...profile, email: e.target.value})} required />
+                    <input type="email" className="input bg-slate-50 text-slate-500 cursor-not-allowed" value={profile.email} readOnly />
                   </div>
                   <div>
                     <label className="input-label">Phone Number</label>
                     <input className="input" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} required />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="input-label">Shop Address</label>
+                    <label className="input-label">Store Address</label>
                     <textarea className="input min-h-[80px]" value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} required />
+                  </div>
+                  
+                  {/* Read Only Store Info */}
+                  <div className="pt-4 border-t border-slate-100 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-5 mt-2">
+                    <div>
+                      <label className="input-label">Store Type</label>
+                      <input 
+                        className="input bg-slate-50 text-slate-500 border-slate-200 cursor-not-allowed font-medium" 
+                        value={user?.store_type || 'Not Set'} 
+                        readOnly 
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Store type is permanently locked.</p>
+                    </div>
+                    <div>
+                      <label className="input-label">Business Setup Status</label>
+                      <div className="h-[42px] flex items-center">
+                        {user?.business_setup_completed ? (
+                          <span className="badge badge-success px-3 py-1.5 font-bold">✓ Setup Completed</span>
+                        ) : (
+                          <span className="badge badge-warning px-3 py-1.5 font-bold">⚠ Pending Setup</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 

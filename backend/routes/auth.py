@@ -97,32 +97,40 @@ DEFAULT_CATEGORIES_BY_TYPE = {
 @auth_bp.route('/business-setup', methods=['POST'])
 @jwt_required()
 def business_setup():
-    current_user_id = get_jwt_identity()
-    user = db.session.get(User, int(current_user_id))
-    if not user:
-        return jsonify({'message': 'User not found'}), 404
+    import traceback
+    try:
+        current_user_id = get_jwt_identity()
+        user = db.session.get(User, int(current_user_id))
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
 
-    data = request.get_json()
-    if not data or not data.get('store_name') or not data.get('store_type'):
-        return jsonify({'message': 'Missing store name or store type'}), 400
+        data = request.get_json()
+        if not data or not data.get('store_name') or not data.get('store_type'):
+            return jsonify({'message': 'Missing store name or store type'}), 400
 
-    user.shop_name = data['store_name'].strip()
-    user.store_address = data.get('store_address', '').strip()
-    user.gst_number = data.get('gst_number', '').strip()
-    user.store_type = data['store_type'].strip()
-    user.business_setup_completed = True
-    user.is_setup_completed = True
+        user.shop_name = data['store_name'].strip()
+        user.store_address = data.get('store_address', '').strip()
+        user.gst_number = data.get('gst_number', '').strip()
+        user.store_type = data['store_type'].strip()
+        user.business_setup_completed = True
+        user.is_setup_completed = True
 
-    # Initialize the POS Counter categories and products dynamically based on store_type
-    from utils.pos_initializer import initialize_pos_for_business
-    initialize_pos_for_business(user.store_type)
+        # Initialize the POS Counter categories and products dynamically based on store_type
+        from utils.pos_initializer import initialize_pos_for_business
+        initialize_pos_for_business(user.store_type, user_id=user.id)
 
-    db.session.commit()
+        db.session.commit()
 
-    return jsonify({
-        'message': 'Business setup completed successfully',
-        'user': user.to_dict()
-    }), 200
+        return jsonify({
+            'message': 'Business setup completed successfully',
+            'user': user.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -140,10 +148,18 @@ def login():
     if not user or not user.check_password(data['password']):
         return jsonify({'message': 'Invalid email or password'}), 401
 
-    # Auto-align setup completed status for existing users (Additional Check)
+    # Auto-align setup and categories for existing legacy users
     from models import Category
-    has_categories = Category.query.count() > 0
-    if user.shop_name and user.store_type and has_categories:
+    has_categories = Category.query.filter_by(user_id=user.id).count() > 0
+    if user.store_type and not has_categories:
+        # User has a selected store type but no isolated categories.
+        # Run pos_initializer to generate them correctly for this user.
+        from utils.pos_initializer import initialize_pos_for_business
+        initialize_pos_for_business(user.store_type, user_id=user.id)
+        db.session.commit()
+    
+    # Ensure setup flags are correct
+    if user.shop_name and user.store_type:
         if not user.business_setup_completed:
             user.business_setup_completed = True
             user.is_setup_completed = True

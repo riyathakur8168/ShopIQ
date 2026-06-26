@@ -17,9 +17,6 @@ def get_categories():
     from models import Category
     # Return categories owned by this user, ordered by name
     categories = Category.query.filter_by(user_id=uid).order_by(Category.name.asc()).all()
-    # Fall back to unowned categories if none exist yet (e.g. first login)
-    if not categories:
-        categories = Category.query.filter(Category.user_id == None).order_by(Category.name.asc()).all()
     return jsonify([cat.to_dict() for cat in categories]), 200
 
 @products_bp.route('/categories', methods=['POST'])

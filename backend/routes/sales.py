@@ -140,6 +140,7 @@ def add_sale():
 @sales_bp.route('/upload', methods=['POST'])
 @jwt_required()
 def upload_sales():
+    uid = _uid()
     if 'file' not in request.files:
         return jsonify({'message': 'No file part in the request'}), 400
     
@@ -156,15 +157,15 @@ def upload_sales():
         except UnicodeDecodeError:
             return jsonify({'message': 'Invalid file encoding. Please upload a UTF-8 encoded CSV file.'}), 400
             
-        # Restore stock for existing sales of the same filename before clearing
-        existing_file_sales = Sale.query.filter(Sale.source_file == file.filename).all()
+        # Restore stock for this user's sales of the same filename before clearing
+        existing_file_sales = Sale.query.filter_by(user_id=uid, source_file=file.filename).all()
         for s in existing_file_sales:
-            prod = Product.query.get(s.product_id)
+            prod = Product.query.filter_by(id=s.product_id, user_id=uid).first()
             if prod:
                 prod.stock_quantity += s.quantity
-        
-        # Clear only the sales of this filename
-        Sale.query.filter(Sale.source_file == file.filename).delete()
+
+        # Clear only this user's sales of this filename
+        Sale.query.filter_by(user_id=uid, source_file=file.filename).delete()
         db.session.commit()
             
         csv_reader = csv.DictReader(stream)
@@ -188,9 +189,12 @@ def upload_sales():
             product = None
             try:
                 if row.get('product_id') and str(row.get('product_id')).strip():
-                    product = db.session.query(Product).with_for_update().filter_by(id=int(row['product_id'])).first()
+                    product = db.session.query(Product).with_for_update().filter_by(id=int(row['product_id']), user_id=uid).first()
                 elif row.get('product_name') and str(row.get('product_name')).strip():
-                    product = db.session.query(Product).with_for_update().filter(func.lower(Product.name) == func.lower(row['product_name'].strip())).first()
+                    product = db.session.query(Product).with_for_update().filter(
+                        func.lower(Product.name) == func.lower(row['product_name'].strip()),
+                        Product.user_id == uid
+                    ).first()
             except (ValueError, TypeError):
                 errors.append(f"Row {row_num}: Invalid product_id format")
                 continue
@@ -238,7 +242,8 @@ def upload_sales():
                 total_amount=round(qty * unit_price, 2),
                 sale_date=sale_date,
                 note=row.get('note', ''),
-                source_file=file.filename
+                source_file=file.filename,
+                user_id=uid
             )
             
             product.stock_quantity -= qty

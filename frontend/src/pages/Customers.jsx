@@ -118,6 +118,7 @@ function DirectoryTab() {
               <tr>
                 <th className="table-header">Name</th>
                 <th className="table-header">Contact</th>
+                <th className="table-header">Outstanding Balance</th>
                 <th className="table-header">Status</th>
                 <th className="table-header text-right">Actions</th>
               </tr>
@@ -135,9 +136,14 @@ function DirectoryTab() {
                     <div>{c.phone || 'No phone'}</div>
                     <div className="text-xs text-slate-400">{c.address}</div>
                   </td>
+                  <td className="table-cell font-bold">
+                    <span className={c.balance > 0 ? 'text-red-600' : 'text-green-600'}>
+                      ₹{c.balance}
+                    </span>
+                  </td>
                   <td className="table-cell">
-                    <span className={c.status === 'pending' ? 'badge badge-warning' : 'badge badge-success'}>
-                      {c.status === 'pending' ? 'Has Udhar' : 'Cleared'}
+                    <span className={c.balance > 0 ? 'badge badge-warning' : 'badge badge-success'}>
+                      {c.balance > 0 ? 'Outstanding' : 'Has Cleared'}
                     </span>
                   </td>
                   <td className="table-cell text-right">
@@ -182,7 +188,7 @@ function CreditTab() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [creditForm, setCreditForm] = useState({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+  const [creditForm, setCreditForm] = useState({ amount: '', note: '', products_purchased: '', quantity: '', bill_amount: '', date: new Date().toISOString().split('T')[0] });
   const [paymentForm, setPaymentForm] = useState({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
   const [search, setSearch] = useState('');
   const { toast } = useToast();
@@ -211,7 +217,7 @@ function CreditTab() {
       const res = await addCredit(selectedCustomer.id, creditForm);
       toast('Credit added!', 'success');
       setSelectedCustomer(res.data.customer);
-      setCreditForm({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+      setCreditForm({ amount: '', note: '', products_purchased: '', quantity: '', bill_amount: '', date: new Date().toISOString().split('T')[0] });
       loadHistory(selectedCustomer.id); load();
     } catch (err) { toast(err.response?.data?.message || 'Failed', 'error'); }
   };
@@ -267,8 +273,8 @@ function CreditTab() {
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-black ${c.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{c.balance}</p>
-                    <span className={c.status === 'pending' ? 'badge-danger text-[10px]' : 'badge-success text-[10px]'}>
-                      {c.status === 'pending' ? 'Pending' : 'Cleared'}
+                    <span className={c.balance > 0 ? 'badge-danger text-[10px]' : 'badge-success text-[10px]'}>
+                      {c.balance > 0 ? 'Outstanding' : 'Has Cleared'}
                     </span>
                   </div>
                 </div>
@@ -280,27 +286,44 @@ function CreditTab() {
         <div className="card flex flex-col shadow-sm h-[600px]">
           {selectedCustomer ? (
             <>
+              {/* Customer header: name, phone, status, balance */}
               <div className="section-header bg-slate-50 rounded-t-2xl">
-                <div>
-                  <h3 className="section-title text-base">{selectedCustomer.name}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{selectedCustomer.phone} · {selectedCustomer.address}</p>
+                <div className="flex items-start justify-between w-full">
+                  <div>
+                    <h3 className="section-title text-base">{selectedCustomer.name}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      📞 {selectedCustomer.phone || 'No phone'}
+                      {selectedCustomer.address ? ` · ${selectedCustomer.address}` : ''}
+                      {selectedCustomer.created_at ? ` · Added on ${selectedCustomer.created_at}` : ''}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${selectedCustomer.balance > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    {selectedCustomer.balance > 0 ? '⚠ Outstanding' : '✓ Has Cleared'}
+                  </span>
                 </div>
               </div>
 
-              <div className="px-5 py-5 border-b border-slate-200 flex gap-6 bg-white">
-                <div><p className="text-xs text-slate-400 font-semibold mb-1">Total Credit</p><p className="text-xl font-black text-red-600">₹{selectedCustomer.total_credit}</p></div>
-                <div><p className="text-xs text-slate-400 font-semibold mb-1">Total Paid</p><p className="text-xl font-black text-green-600">₹{selectedCustomer.total_paid}</p></div>
-                <div><p className="text-xs text-slate-400 font-semibold mb-1">Balance</p><p className={`text-xl font-black ${selectedCustomer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{selectedCustomer.balance}</p></div>
+              {/* Balance summary strip */}
+              <div className="px-5 py-4 border-b border-slate-200 flex gap-6 bg-white">
+                <div><p className="text-xs text-slate-400 font-semibold mb-1">Total Credit</p><p className="text-lg font-black text-red-600">₹{selectedCustomer.total_credit.toLocaleString()}</p></div>
+                <div><p className="text-xs text-slate-400 font-semibold mb-1">Total Paid</p><p className="text-lg font-black text-green-600">₹{selectedCustomer.total_paid.toLocaleString()}</p></div>
+                <div><p className="text-xs text-slate-400 font-semibold mb-1">Outstanding</p><p className={`text-lg font-black ${selectedCustomer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{selectedCustomer.balance.toLocaleString()}</p></div>
               </div>
 
               <div className="px-5 py-5 border-b border-slate-200 bg-slate-50 flex-shrink-0">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">ADD CREDIT</p>
-                    <form onSubmit={handleCredit} className="flex gap-2">
-                      <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" required value={creditForm.amount} placeholder="₹ Amount"
-                        onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} />
-                      <button type="submit" className="btn bg-red-600 text-white hover:bg-red-700 text-sm font-bold shadow-sm">Add</button>
+                    <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">ADD CREDIT (UDHAR)</p>
+                    <form onSubmit={handleCredit} className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <input className="input flex-[2] py-2 text-sm border-slate-300 bg-white" placeholder="Products (e.g. Milk)" value={creditForm.products_purchased} onChange={e => setCreditForm(f => ({ ...f, products_purchased: e.target.value }))} />
+                        <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" placeholder="Qty" value={creditForm.quantity} onChange={e => setCreditForm(f => ({ ...f, quantity: e.target.value }))} />
+                      </div>
+                      <div className="flex gap-2">
+                        <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" placeholder="Bill ₹" value={creditForm.bill_amount} onChange={e => setCreditForm(f => ({ ...f, bill_amount: e.target.value }))} />
+                        <input className="input flex-1 py-2 text-sm border-slate-300 bg-white border-red-300" type="number" step="0.01" required value={creditForm.amount} placeholder="Credit ₹" onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} />
+                        <button type="submit" className="btn bg-red-600 text-white hover:bg-red-700 text-sm font-bold shadow-sm px-3">Add</button>
+                      </div>
                     </form>
                   </div>
                   <div>
@@ -319,19 +342,93 @@ function CreditTab() {
                 {historyLoading ? <div className="flex justify-center py-8"><span className="spinner" /></div> : (
                   <div className="divide-y divide-slate-100">
                     {history.map(r => (
-                      <div key={r.id} className="flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black ${r.record_type === 'credit' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                      <div key={r.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-start gap-3 w-full">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 mt-0.5 ${r.record_type === 'credit' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
                             {r.record_type === 'credit' ? '−' : '+'}
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-800 capitalize">{r.record_type}</p>
-                            <p className="text-[11px] text-slate-500 font-medium">{r.date} · {r.note || 'No note'}</p>
+                          <div className="w-full">
+                            {r.record_type === 'credit' ? (
+                              <div className="w-full">
+                                <div className="flex justify-between items-center mb-2">
+                                  <p className="text-sm font-bold text-slate-800">
+                                    {r.bill_number ? `Bill #${r.bill_number}` : 'Udhar Bill'}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 font-medium">{r.date}</p>
+                                </div>
+                                
+                                {r.products_purchased && (
+                                  <div className="mb-3">
+                                    <p className="text-xs font-bold text-slate-500 mb-1">Purchased:</p>
+                                    {(() => {
+                                      try {
+                                        const arr = JSON.parse(r.products_purchased);
+                                        if (Array.isArray(arr)) {
+                                          return (
+                                            <ul className="space-y-1.5 pl-1">
+                                              {arr.map((p, idx) => (
+                                                <li key={idx} className="flex justify-between items-start text-sm text-slate-700">
+                                                  <span>• {p.name} <span className="font-bold ml-1 text-slate-500">×{p.quantity}</span></span>
+                                                  <div className="text-right">
+                                                    <p className="text-[10px] text-slate-400 leading-none mb-0.5">Unit Price: ₹{p.unit_price}</p>
+                                                    <span className="font-bold">₹{p.total.toLocaleString()}</span>
+                                                  </div>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          );
+                                        }
+                                      } catch(e) {
+                                        return <p className="text-sm text-slate-700 pl-1">• {r.products_purchased} {r.quantity ? `×${r.quantity}` : ''}</p>;
+                                      }
+                                    })()}
+                                  </div>
+                                )}
+
+                                <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+                                  <div className="flex justify-between items-center">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Bill Amount:</p>
+                                    <p className="text-sm font-black text-slate-800">₹{(r.bill_amount || r.amount).toLocaleString()}</p>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Payment:</p>
+                                    <p className="text-sm font-black text-slate-800">₹0</p>
+                                  </div>
+                                  <div className="flex justify-between items-center pt-2 mt-1 border-t border-dashed border-slate-100">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending After Transaction:</p>
+                                    <p className={`text-sm font-black ${r.running_balance > 0 ? 'text-red-500' : 'text-green-600'}`}>₹{(r.running_balance ?? 0).toLocaleString()}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-start w-full">
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800 mb-1">Payment Received</p>
+                                  <p className="text-sm font-black text-green-600">Amount: ₹{r.amount.toLocaleString()}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[11px] text-slate-500 font-medium mb-1">{r.date}</p>
+                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Remaining Pending:</p>
+                                  <p className={`text-sm font-black ${r.running_balance > 0 ? 'text-red-500' : 'text-green-600'}`}>₹{(r.running_balance ?? 0).toLocaleString()}</p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {r.note && (
+                              <p className="mt-3 text-[11px] text-slate-400 italic">Note: {r.note}</p>
+                            )}
                           </div>
                         </div>
-                        <p className={`text-base font-black ${r.record_type === 'credit' ? 'text-red-600' : 'text-green-600'}`}>₹{r.amount}</p>
                       </div>
                     ))}
+                    
+                    {history.length > 0 && (
+                      <div className="px-5 py-5 bg-red-50/50 border-t-2 border-red-100 flex justify-between items-center rounded-b-2xl">
+                        <span className="font-black text-red-800 tracking-widest uppercase text-sm">TOTAL OUTSTANDING</span>
+                        <span className="text-xl font-black text-red-700">₹{selectedCustomer.balance.toLocaleString()}</span>
+                      </div>
+                    )}
+
                     {history.length === 0 && <p className="text-center text-slate-400 text-sm py-12">No transactions yet</p>}
                   </div>
                 )}

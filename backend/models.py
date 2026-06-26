@@ -176,15 +176,27 @@ class CreditRecord(db.Model):
     record_type = db.Column(db.String(10), nullable=False)  # 'credit' or 'payment'
     amount = db.Column(db.Float, nullable=False)
     note = db.Column(db.String(255), default='')
+    
+    products_purchased = db.Column(db.String(255), nullable=True)
+    quantity = db.Column(db.Integer, nullable=True)
+    bill_amount = db.Column(db.Float, nullable=True)
+    bill_number = db.Column(db.String(50), nullable=True)
+    
     date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
-            'id': self.id, 'customer_id': self.customer_id,
-            'record_type': self.record_type, 'amount': self.amount,
+            'id': self.id,
+            'record_type': self.record_type,
+            'amount': self.amount,
             'note': self.note,
-            'date': self.date.strftime('%Y-%m-%d') if self.date else ''
+            'products_purchased': self.products_purchased,
+            'quantity': self.quantity,
+            'bill_amount': self.bill_amount,
+            'bill_number': self.bill_number,
+            'date': self.date.strftime('%d %b %Y') if self.date else '',
+            'created_at': self.created_at.isoformat() + 'Z' if self.created_at else None
         }
 
 
@@ -245,25 +257,31 @@ def normalize_category_name(name):
     return clean.title()
 
 def resolve_product_category(product, session):
+    # If the category is already explicitly linked via foreign key, skip resolution
+    if getattr(product, 'category_id', None) is not None:
+        return
+
     cat_str = product.category
     if not cat_str or not cat_str.strip():
         cat_str = suggest_category(product.name)
     
     normalized_name = normalize_category_name(cat_str)
     
-    # Search for category scoped to this user first, then fall back to global
-    user_id = product.user_id
+    user_id = getattr(product, 'user_id', None)
     cat = None
-    if user_id:
-        cat = session.query(Category).filter(
-            db.func.lower(Category.name) == normalized_name.lower(),
-            Category.user_id == user_id
-        ).first()
-    if not cat:
-        cat = session.query(Category).filter(
-            db.func.lower(Category.name) == normalized_name.lower(),
-            Category.user_id == None
-        ).first()
+
+    # Disable autoflush to prevent 'A flush is already in progress' InvalidRequestError
+    with session.no_autoflush:
+        if user_id:
+            cat = session.query(Category).filter(
+                db.func.lower(Category.name) == normalized_name.lower(),
+                Category.user_id == user_id
+            ).first()
+        if not cat:
+            cat = session.query(Category).filter(
+                db.func.lower(Category.name) == normalized_name.lower(),
+                Category.user_id == None
+            ).first()
     
     if not cat:
         # Check session.new for an in-flight Category with the same name and user
