@@ -127,7 +127,11 @@ function ProductsTab() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">Product Catalog</h3>
-        <button className="btn-primary shadow-sm" onClick={() => { setShowForm(!showForm); setEditProduct(null); setForm(EMPTY_FORM); }}>
+        <button className="btn-primary shadow-sm" onClick={() => { 
+          setShowForm(!showForm); 
+          setEditProduct(null); 
+          setForm({ ...EMPTY_FORM, category: catFilter !== 'All' ? catFilter : '' }); 
+        }}>
           {showForm ? 'Close Form' : '+ Add Product'}
         </button>
       </div>

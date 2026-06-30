@@ -182,6 +182,34 @@ def get_notifications():
         'count': len(notifications)
     }), 200
 
+from models import Category
+
+def _resolve_category(name, uid):
+    if not name:
+        name = 'General'
+    normalized_name = name.strip().title() if name.strip().lower() != 'general' else 'General'
+    
+    cat = Category.query.filter(
+        db.func.lower(Category.name) == normalized_name.lower(),
+        Category.user_id == uid
+    ).first()
+    
+    if not cat:
+        cat = Category(name=normalized_name, user_id=uid)
+        db.session.add(cat)
+        db.session.flush()
+    
+    return cat.id, normalized_name
+
+def _cleanup_category(category_id):
+    if not category_id: return
+    cat = Category.query.get(category_id)
+    if not cat or cat.name.lower() == 'general': return
+    
+    count = Product.query.filter_by(category_id=category_id).count()
+    if count == 0:
+        db.session.delete(cat)
+
 @products_bp.route('/', methods=['POST'])
 @jwt_required()
 def add_product():
@@ -190,9 +218,12 @@ def add_product():
     if not data or not data.get('name') or not data.get('buy_price') or not data.get('sell_price'):
         return jsonify({'message': 'Missing required fields'}), 400
 
+    cat_id, cat_name = _resolve_category(data.get('category', ''), uid)
+
     new_product = Product(
         name=data['name'],
-        category=data.get('category', ''),
+        category=cat_name,
+        category_id=cat_id,
         buy_price=float(data['buy_price']),
         sell_price=float(data['sell_price']),
         stock_quantity=int(data.get('stock_quantity', 0)),
@@ -215,11 +246,21 @@ def update_product(product_id):
 
     data = request.get_json()
     product.name = data.get('name', product.name)
-    product.category = data.get('category', product.category)
+    
+    old_cat_id = product.category_id
+    if 'category' in data:
+        cat_id, cat_name = _resolve_category(data['category'], uid)
+        product.category = cat_name
+        product.category_id = cat_id
+
     product.buy_price = data.get('buy_price', product.buy_price)
     product.sell_price = data.get('sell_price', product.sell_price)
     product.stock_quantity = data.get('stock_quantity', product.stock_quantity)
     product.low_stock_threshold = data.get('low_stock_threshold', product.low_stock_threshold)
+
+    db.session.flush() # Ensure DB state is updated before counting
+    if 'category' in data and old_cat_id and old_cat_id != product.category_id:
+        _cleanup_category(old_cat_id)
 
     db.session.commit()
     return jsonify({'message': 'Product updated successfully', 'product': product.to_dict()}), 200
@@ -233,7 +274,11 @@ def delete_product(product_id):
     if not product:
         return jsonify({'message': 'Product not found'}), 404
 
+    old_cat_id = product.category_id
     db.session.delete(product)
+    db.session.flush() # Ensure DB state reflects deletion before counting
+    _cleanup_category(old_cat_id)
+    
     db.session.commit()
     return jsonify({'message': 'Product deleted successfully'}), 200
 

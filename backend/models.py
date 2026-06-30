@@ -177,7 +177,7 @@ class CreditRecord(db.Model):
     amount = db.Column(db.Float, nullable=False)
     note = db.Column(db.String(255), default='')
     
-    products_purchased = db.Column(db.String(255), nullable=True)
+    products_purchased = db.Column(db.Text, nullable=True)   # JSON array of purchased items – TEXT to avoid truncation
     quantity = db.Column(db.Integer, nullable=True)
     bill_amount = db.Column(db.Float, nullable=True)
     bill_number = db.Column(db.String(50), nullable=True)

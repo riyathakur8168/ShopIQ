@@ -314,9 +314,29 @@ function CreditTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">ADD CREDIT (UDHAR)</p>
-                    <form onSubmit={handleCredit} className="flex flex-col gap-2">
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const formattedForm = { ...creditForm };
+                        if (formattedForm.products_purchased && !formattedForm.products_purchased.startsWith('[')) {
+                          const qty = Number(formattedForm.quantity) || 1;
+                          const amt = Number(formattedForm.amount);
+                          formattedForm.products_purchased = JSON.stringify([{
+                            name: formattedForm.products_purchased,
+                            quantity: qty,
+                            unit_price: amt / qty,
+                            total: amt
+                          }]);
+                        }
+                        const res = await addCredit(selectedCustomer.id, formattedForm);
+                        toast('Credit added!', 'success');
+                        setSelectedCustomer(res.data.customer);
+                        setCreditForm({ amount: '', note: '', products_purchased: '', quantity: '', bill_amount: '', date: new Date().toISOString().split('T')[0] });
+                        loadHistory(selectedCustomer.id); load();
+                      } catch (err) { toast(err.response?.data?.message || 'Failed', 'error'); }
+                    }} className="flex flex-col gap-2">
                       <div className="flex gap-2">
-                        <input className="input flex-[2] py-2 text-sm border-slate-300 bg-white" placeholder="Products (e.g. Milk)" value={creditForm.products_purchased} onChange={e => setCreditForm(f => ({ ...f, products_purchased: e.target.value }))} />
+                        <input className="input flex-[2] py-2 text-sm border-slate-300 bg-white" placeholder="Products (e.g. Milk)" required value={creditForm.products_purchased} onChange={e => setCreditForm(f => ({ ...f, products_purchased: e.target.value }))} />
                         <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" placeholder="Qty" value={creditForm.quantity} onChange={e => setCreditForm(f => ({ ...f, quantity: e.target.value }))} />
                       </div>
                       <div className="flex gap-2">
@@ -359,57 +379,55 @@ function CreditTab() {
                                 
                                 {r.products_purchased && (
                                   <div className="mb-3">
-                                    <p className="text-xs font-bold text-slate-500 mb-1">Purchased:</p>
+                                    <p className="text-xs font-bold text-slate-500 mb-2">Products Purchased</p>
                                     {(() => {
                                       try {
                                         const arr = JSON.parse(r.products_purchased);
                                         if (Array.isArray(arr)) {
                                           return (
-                                            <ul className="space-y-1.5 pl-1">
+                                            <ul className="space-y-4 pl-1 mt-2">
                                               {arr.map((p, idx) => (
-                                                <li key={idx} className="flex justify-between items-start text-sm text-slate-700">
-                                                  <span>• {p.name} <span className="font-bold ml-1 text-slate-500">×{p.quantity}</span></span>
-                                                  <div className="text-right">
-                                                    <p className="text-[10px] text-slate-400 leading-none mb-0.5">Unit Price: ₹{p.unit_price}</p>
-                                                    <span className="font-bold">₹{p.total.toLocaleString()}</span>
-                                                  </div>
+                                                <li key={idx} className="flex flex-col gap-1">
+                                                  <p className="text-sm font-bold text-slate-800">• {p.name} ×{p.quantity}</p>
+                                                  <p className="text-sm text-slate-600">₹{p.unit_price} each</p>
+                                                  <p className="text-sm font-semibold text-slate-700">Subtotal ₹{p.total.toLocaleString()}</p>
                                                 </li>
                                               ))}
                                             </ul>
                                           );
                                         }
                                       } catch(e) {
-                                        return <p className="text-sm text-slate-700 pl-1">• {r.products_purchased} {r.quantity ? `×${r.quantity}` : ''}</p>;
+                                        return <p className="text-sm font-medium text-slate-700 pl-1 mt-2">• {r.products_purchased} {r.quantity ? `×${r.quantity}` : ''}</p>;
                                       }
                                     })()}
                                   </div>
                                 )}
 
-                                <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
-                                  <div className="flex justify-between items-center">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Bill Amount:</p>
-                                    <p className="text-sm font-black text-slate-800">₹{(r.bill_amount || r.amount).toLocaleString()}</p>
+                                <div className="flex flex-col gap-4 pt-4 mt-2 border-t border-slate-100">
+                                  <div>
+                                    <p className="text-xs text-slate-500 font-bold tracking-wide mb-1">Bill Total</p>
+                                    <p className="text-lg font-black text-slate-800">₹{(r.bill_amount || r.amount).toLocaleString()}</p>
                                   </div>
-                                  <div className="flex justify-between items-center">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Payment:</p>
-                                    <p className="text-sm font-black text-slate-800">₹0</p>
-                                  </div>
-                                  <div className="flex justify-between items-center pt-2 mt-1 border-t border-dashed border-slate-100">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending After Transaction:</p>
-                                    <p className={`text-sm font-black ${r.running_balance > 0 ? 'text-red-500' : 'text-green-600'}`}>₹{(r.running_balance ?? 0).toLocaleString()}</p>
+                                  <div>
+                                    <p className="text-xs text-slate-500 font-bold tracking-wide mb-1">Outstanding After Purchase</p>
+                                    <p className={`text-lg font-black ${r.running_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{(r.running_balance ?? 0).toLocaleString()}</p>
                                   </div>
                                 </div>
                               </div>
                             ) : (
-                              <div className="flex justify-between items-start w-full">
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800 mb-1">Payment Received</p>
-                                  <p className="text-sm font-black text-green-600">Amount: ₹{r.amount.toLocaleString()}</p>
+                              <div className="w-full">
+                                <div className="flex justify-between items-center mb-4">
+                                  <p className="text-sm font-bold text-slate-800">Payment Received</p>
+                                  <p className="text-[11px] text-slate-500 font-medium">{r.date}</p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-[11px] text-slate-500 font-medium mb-1">{r.date}</p>
-                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Remaining Pending:</p>
-                                  <p className={`text-sm font-black ${r.running_balance > 0 ? 'text-red-500' : 'text-green-600'}`}>₹{(r.running_balance ?? 0).toLocaleString()}</p>
+                                <div className="flex flex-col gap-4">
+                                  <div>
+                                    <p className="text-lg font-black text-green-600">₹{r.amount.toLocaleString()}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-500 font-bold tracking-wide mb-1">Outstanding After Payment</p>
+                                    <p className={`text-lg font-black ${r.running_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{(r.running_balance ?? 0).toLocaleString()}</p>
+                                  </div>
                                 </div>
                               </div>
                             )}

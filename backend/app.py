@@ -119,6 +119,44 @@ def create_app(config_class=Config):
             "added bill_number to credit_records"
         )
 
+        # ── Critical fix: expand products_purchased from VARCHAR(255) → TEXT ──
+        # VARCHAR(255) silently truncates long JSON arrays, causing products to vanish
+        try:
+            col_info = db.session.execute(
+                db.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='credit_records'")
+            ).scalar() or ''
+            if 'products_purchased VARCHAR(255)' in col_info or 'products_purchased VARCHAR' in col_info.upper():
+                db.session.execute(db.text("""
+                    CREATE TABLE IF NOT EXISTS credit_records_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        customer_id INTEGER NOT NULL REFERENCES customers(id),
+                        record_type VARCHAR(10) NOT NULL,
+                        amount FLOAT NOT NULL,
+                        note TEXT DEFAULT '',
+                        products_purchased TEXT,
+                        quantity INTEGER,
+                        bill_amount FLOAT,
+                        bill_number VARCHAR(50),
+                        date DATE,
+                        created_at DATETIME
+                    )
+                """))
+                db.session.execute(db.text("""
+                    INSERT INTO credit_records_new
+                        (id, customer_id, record_type, amount, note,
+                         products_purchased, quantity, bill_amount, bill_number, date, created_at)
+                    SELECT id, customer_id, record_type, amount, note,
+                           products_purchased, quantity, bill_amount, bill_number, date, created_at
+                    FROM credit_records
+                """))
+                db.session.execute(db.text("DROP TABLE credit_records"))
+                db.session.execute(db.text("ALTER TABLE credit_records_new RENAME TO credit_records"))
+                db.session.commit()
+                print("Migration: Expanded products_purchased to TEXT in credit_records")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Migration (products_purchased TEXT): {e}")
+
         try:
             # Legacy DBs created by SQLAlchemy may have a UNIQUE constraint on categories.name
             # SQLite does not support DROP CONSTRAINT, so we safely recreate the table.
