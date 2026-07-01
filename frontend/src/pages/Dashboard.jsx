@@ -6,6 +6,7 @@ import Inventory from './Inventory';
 import Customers from './Customers';
 import Settings from './Settings';
 import POSCounter from './POSCounter';
+import Suppliers from './Suppliers';
 import { useAuth } from '../context/AuthContext';
 import { getInventoryNotifications } from '../services/api';
 
@@ -34,6 +35,7 @@ export default function Dashboard() {
       case 'Analytics':   return <Sales setActiveTab={setActiveTab} />;
       case 'Inventory':   return <Inventory />;
       case 'Customers':   return <Customers />;
+      case 'Suppliers':   return <Suppliers />;
       case 'Settings':    return <Settings />;
       default:            return <POSCounter setActiveTab={setActiveTab} />;
     }

@@ -1,7 +1,7 @@
 from flask import Flask
 from config import Config
 from extensions import db, jwt, cors
-from models import User, Product, Sale, Customer, CreditRecord, Invoice
+from models import User, Product, Sale, Customer, CreditRecord, Invoice, Supplier, SupplierRecord
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -16,12 +16,14 @@ def create_app(config_class=Config):
     from routes.sales import sales_bp
     from routes.customers import customers_bp
     from routes.invoices import invoices_bp
+    from routes.suppliers import suppliers_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(sales_bp)
     app.register_blueprint(customers_bp)
     app.register_blueprint(invoices_bp)
+    app.register_blueprint(suppliers_bp)
 
     @app.route('/')
     def index():

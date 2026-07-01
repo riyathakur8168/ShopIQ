@@ -70,6 +70,16 @@ export const getCustomer = (id) => API.get(`/customers/${id}`);
 export const addCredit = (id, data) => API.post(`/customers/${id}/credit`, data);
 export const recordPayment = (id, data) => API.post(`/customers/${id}/payment`, data);
 
+// Suppliers
+export const getSuppliers = (params) => API.get('/suppliers/', { params });
+export const addSupplier = (data) => API.post('/suppliers/', data);
+export const updateSupplier = (id, data) => API.put(`/suppliers/${id}`, data);
+export const deleteSupplier = (id) => API.delete(`/suppliers/${id}`);
+export const getSupplier = (id) => API.get(`/suppliers/${id}`);
+export const addSupplierPurchase = (id, data) => API.post(`/suppliers/${id}/purchase`, data);
+export const recordSupplierPayment = (id, data) => API.post(`/suppliers/${id}/payment`, data);
+
+
 // Invoices
 export const getInvoices = () => API.get('/invoices/');
 export const createInvoice = (data) => API.post('/invoices/', data);

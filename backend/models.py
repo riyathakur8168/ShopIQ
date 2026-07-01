@@ -225,6 +225,84 @@ class Invoice(db.Model):
             'invoice_date': self.invoice_date.strftime('%Y-%m-%d') if self.invoice_date else ''
         }
 
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    business_name = db.Column(db.String(100), nullable=False)
+    contact_person = db.Column(db.String(100), default='')
+    phone = db.Column(db.String(20), default='')
+    email = db.Column(db.String(100), default='')
+    gst_number = db.Column(db.String(50), default='')
+    address = db.Column(db.String(255), default='')
+    city = db.Column(db.String(100), default='')
+    state = db.Column(db.String(100), default='')
+    pincode = db.Column(db.String(20), default='')
+    product_category = db.Column(db.String(100), default='')
+    notes = db.Column(db.Text, default='')
+    status = db.Column(db.String(20), default='Active')  # 'Active' or 'Inactive'
+    total_purchase = db.Column(db.Float, default=0.0)
+    total_paid = db.Column(db.Float, default=0.0)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    records = db.relationship('SupplierRecord', backref='supplier', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def balance(self):
+        return self.total_purchase - self.total_paid
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'business_name': self.business_name,
+            'contact_person': self.contact_person,
+            'phone': self.phone,
+            'email': self.email,
+            'gst_number': self.gst_number,
+            'address': self.address,
+            'city': self.city,
+            'state': self.state,
+            'pincode': self.pincode,
+            'product_category': self.product_category,
+            'notes': self.notes,
+            'status': self.status,
+            'total_purchase': self.total_purchase,
+            'total_paid': self.total_paid,
+            'balance': self.balance,
+            'created_at': self.created_at.strftime('%Y-%m-%d')
+        }
+
+
+class SupplierRecord(db.Model):
+    __tablename__ = 'supplier_records'
+    id = db.Column(db.Integer, primary_key=True)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
+    record_type = db.Column(db.String(10), nullable=False)  # 'purchase' or 'payment'
+    amount = db.Column(db.Float, nullable=False)
+    note = db.Column(db.String(255), default='')
+    
+    products_purchased = db.Column(db.Text, nullable=True)   # JSON string of products
+    quantity = db.Column(db.Integer, nullable=True)
+    invoice_number = db.Column(db.String(50), nullable=True)
+    
+    date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'record_type': self.record_type,
+            'amount': self.amount,
+            'note': self.note,
+            'products_purchased': self.products_purchased,
+            'quantity': self.quantity,
+            'invoice_number': self.invoice_number,
+            'date': self.date.strftime('%Y-%m-%d') if self.date else '',
+            'created_at': self.created_at.isoformat() + 'Z' if self.created_at else None
+        }
+
+
 class SystemState(db.Model):
     __tablename__ = 'system_state'
     key = db.Column(db.String(50), primary_key=True)
