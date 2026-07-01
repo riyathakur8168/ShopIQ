@@ -189,9 +189,28 @@ export default function POSCounter({ setActiveTab }) {
         });
       }
 
-      // 3. Process Udhar
+      // 3. Process Udhar — send complete cart so ledger stores full product details
       if (paymentMethod === 'Udhar' && finalCustomer) {
-        await addCredit(finalCustomer.id, { amount: totalAmount });
+        const billNumber = invRes.data?.invoice?.id
+          ? String(invRes.data.invoice.id)
+          : String(Math.floor(Date.now() / 1000));
+
+        const productsJSON = JSON.stringify(cart.map(item => ({
+          name:       item.name,
+          quantity:   item.cartQty,
+          unit_price: item.sell_price,
+          total:      item.sell_price * item.cartQty
+        })));
+
+        await addCredit(finalCustomer.id, {
+          amount:             totalAmount,
+          bill_amount:        totalAmount,
+          bill_number:        billNumber,
+          products_purchased: productsJSON,
+          quantity:           cart.reduce((s, i) => s + i.cartQty, 0),
+          note:               'POS Udhar Sale',
+          date:               new Date().toISOString().split('T')[0]
+        });
       }
 
       // 4. Generate Bill/Invoice

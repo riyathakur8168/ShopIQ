@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -114,7 +114,163 @@ function inputCls(hasError) {
   }`;
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
+// ─── OTP Verifier ────────────────────────────────────────────────────────────
+// Self-contained inline OTP widget used for email and phone verification
+
+function OtpVerifier({ type, value, isValueValid, onVerified }) {
+  const [phase, setPhase] = useState('idle'); // idle | sending | otp_sent | verifying | verified
+  const [otpInput, setOtpInput] = useState('');
+  const [error, setError] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [devOtp, setDevOtp] = useState('');
+  const timerRef = useRef(null);
+  const { toast } = useToast();
+
+  // Clear state when value changes so user can re-verify new input
+  useEffect(() => {
+    if (phase !== 'idle') {
+      setPhase('idle');
+      setOtpInput('');
+      setError('');
+      setDevOtp('');
+      clearInterval(timerRef.current);
+    }
+  }, [value]);
+
+  const startTimer = () => {
+    setSecondsLeft(120);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setSecondsLeft(s => {
+        if (s <= 1) { clearInterval(timerRef.current); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSend = async () => {
+    if (!isValueValid) return;
+    setPhase('sending');
+    setError('');
+    try {
+      const res = await api.sendOtp(type, value);
+      setDevOtp(res.data.dev_otp || '');
+      setOtpInput('');
+      setPhase('otp_sent');
+      startTimer();
+      toast(`OTP sent to your ${type === 'email' ? 'email address' : 'mobile number'}`, 'success');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+      setPhase('idle');
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!otpInput.trim()) { setError('Please enter the OTP.'); return; }
+    if (secondsLeft === 0) { setError('OTP has expired. Please request a new OTP.'); return; }
+    setPhase('verifying');
+    setError('');
+    try {
+      await api.verifyOtp(type, value, otpInput.trim());
+      clearInterval(timerRef.current);
+      setPhase('verified');
+      toast(`✅ ${type === 'email' ? 'Email' : 'Mobile number'} verified successfully!`, 'success');
+      onVerified();
+    } catch (err) {
+      setPhase('otp_sent');
+      setError(err.response?.data?.message || 'Incorrect OTP. Please try again.');
+    }
+  };
+
+  const formatTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+  if (phase === 'verified') {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+          <span className="text-base">✔</span> Verified
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 space-y-2">
+      {/* Verify / Sending button */}
+      {phase === 'idle' && (
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={!isValueValid}
+          className="text-xs font-bold text-[#2563EB] border border-[#2563EB] px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Verify
+        </button>
+      )}
+      {phase === 'sending' && (
+        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+          <span className="spinner w-3 h-3 border-2 border-blue-500 border-t-transparent inline-block rounded-full" />
+          Sending OTP...
+        </span>
+      )}
+
+      {/* OTP input block */}
+      {(phase === 'otp_sent' || phase === 'verifying') && (
+        <div className="space-y-2 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              maxLength={6}
+              placeholder="Enter 6-digit OTP"
+              value={otpInput}
+              onChange={e => { setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+              className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] tracking-[0.3em] shadow-inner"
+            />
+            <button
+              type="button"
+              onClick={handleVerify}
+              disabled={phase === 'verifying' || secondsLeft === 0 || otpInput.length < 6}
+              className="px-3 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {phase === 'verifying' ? '...' : 'Submit'}
+            </button>
+          </div>
+
+          {/* Timer + resend */}
+          <div className="flex items-center justify-between">
+            {secondsLeft > 0 ? (
+              <span className="text-[10px] font-bold text-slate-500">
+                OTP expires in{' '}
+                <span className={secondsLeft <= 30 ? 'text-red-500' : 'text-slate-700'}>{formatTime(secondsLeft)}</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-red-500">OTP Expired</span>
+            )}
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={secondsLeft > 0}
+              className="text-[10px] font-bold text-[#2563EB] disabled:text-slate-400 disabled:cursor-not-allowed hover:underline transition-colors"
+            >
+              Resend OTP
+            </button>
+          </div>
+
+          {/* Dev OTP hint */}
+          {devOtp && (
+            <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">
+              [DEV] Your OTP is: <span className="tracking-widest">{devOtp}</span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Error message */}
+      {error && <p className="text-[10px] font-semibold text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 
 export default function Login() {
   const [mode, setMode] = useState('login');
@@ -125,6 +281,8 @@ export default function Login() {
   const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
 
   const { login } = useAuth();
   const { toast } = useToast();
@@ -205,6 +363,16 @@ export default function Login() {
         setLoading(false);
         return;
       }
+      if (!emailVerified) {
+        toast('Please verify your email address before creating your account.', 'error');
+        setLoading(false);
+        return;
+      }
+      if (!phoneVerified) {
+        toast('Please verify your mobile number before creating your account.', 'error');
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -238,6 +406,8 @@ export default function Login() {
     setErrors({});
     setTouched({});
     setShowPassword(false);
+    setEmailVerified(false);
+    setPhoneVerified(false);
   };
 
   return (
@@ -396,10 +566,18 @@ export default function Login() {
                       placeholder="9876543210"
                       maxLength={10}
                       value={form.phone}
-                      onChange={e => handlePhoneChange(e.target.value)}
+                      onChange={e => { handlePhoneChange(e.target.value); setPhoneVerified(false); }}
                       onBlur={() => handleBlur('phone')}
                     />
                     <FieldError msg={touched.phone && errors.phone} />
+                    {!errors.phone && form.phone.length === 10 && (
+                      <OtpVerifier
+                        type="phone"
+                        value={form.phone}
+                        isValueValid={!validatePhone(form.phone)}
+                        onVerified={() => setPhoneVerified(true)}
+                      />
+                    )}
                   </div>
                 </>
               )}
@@ -412,11 +590,19 @@ export default function Login() {
                   type="email"
                   placeholder="owner@myshop.com"
                   value={form.email}
-                  onChange={e => handleChange('email', e.target.value)}
+                  onChange={e => { handleChange('email', e.target.value); setEmailVerified(false); }}
                   onBlur={() => mode === 'signup' && handleBlur('email')}
                   required
                 />
                 {mode === 'signup' && <FieldError msg={touched.email && errors.email} />}
+                {mode === 'signup' && !errors.email && form.email && (
+                  <OtpVerifier
+                    type="email"
+                    value={form.email}
+                    isValueValid={!validateEmail(form.email)}
+                    onVerified={() => setEmailVerified(true)}
+                  />
+                )}
               </div>
               
               {/* Password */}
@@ -489,7 +675,7 @@ export default function Login() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (mode === 'signup' && (!emailVerified || !phoneVerified))}
                 className="w-full bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm mt-2"
               >
                 {loading ? (

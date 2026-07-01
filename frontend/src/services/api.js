@@ -27,6 +27,8 @@ export const login = (data) => API.post('/auth/login', data);
 export const signup = (data) => API.post('/auth/signup', data);
 export const setupBusiness = (data) => API.post('/auth/business-setup', data);
 export const getMe = () => API.get('/auth/me');
+export const sendOtp = (type, value) => API.post('/auth/send-otp', { type, value });
+export const verifyOtp = (type, value, otp) => API.post('/auth/verify-otp', { type, value, otp });
 
 // Products
 export const getProducts = (params) => API.get('/products/', { params });

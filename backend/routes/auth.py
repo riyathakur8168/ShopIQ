@@ -4,8 +4,90 @@ from models import User
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from utils.rate_limiter import rate_limit
 import re
+import random
+import time
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+
+# ── In-memory OTP store  { key -> {otp, expires_at} } ──────────────────────
+# key = "email:<email>" or "phone:<phone>"
+_OTP_STORE: dict = {}
+OTP_TTL_SECONDS = 120  # 2 minutes
+
+def _make_otp() -> str:
+    return str(random.randint(100000, 999999))
+
+def _store_otp(key: str, otp: str):
+    _OTP_STORE[key] = {'otp': otp, 'expires_at': time.time() + OTP_TTL_SECONDS}
+
+def _verify_otp(key: str, submitted: str) -> tuple[bool, str]:
+    """Returns (success, error_message)."""
+    record = _OTP_STORE.get(key)
+    if not record:
+        return False, 'No OTP found. Please request a new OTP.'
+    if time.time() > record['expires_at']:
+        _OTP_STORE.pop(key, None)
+        return False, 'OTP has expired. Please request a new OTP.'
+    if record['otp'] != submitted.strip():
+        return False, 'Incorrect OTP. Please try again.'
+    _OTP_STORE.pop(key, None)  # Consume OTP on success
+    return True, ''
+
+# ── OTP Routes ──────────────────────────────────────────────────────────────
+
+@auth_bp.route('/send-otp', methods=['POST'])
+@rate_limit(max_calls=5, window_seconds=60)
+def send_otp():
+    data = request.get_json() or {}
+    otp_type = data.get('type')  # 'email' or 'phone'
+    value = (data.get('value') or '').strip()
+
+    if otp_type == 'email':
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', value):
+            return jsonify({'message': 'Please enter a valid email address.'}), 400
+        otp = _make_otp()
+        _store_otp(f'email:{value.lower()}', otp)
+        # In production: send via SMTP/SendGrid here.
+        # In development: return OTP in response so you can test without email server.
+        print(f'[DEV] Email OTP for {value}: {otp}')
+        return jsonify({'message': f'OTP sent to {value}', 'dev_otp': otp}), 200
+
+    elif otp_type == 'phone':
+        digits = re.sub(r'\D', '', value)
+        if len(digits) != 10:
+            return jsonify({'message': 'Please enter a valid 10-digit mobile number.'}), 400
+        otp = _make_otp()
+        _store_otp(f'phone:{digits}', otp)
+        # In production: send via Twilio/MSG91 here.
+        print(f'[DEV] Phone OTP for {digits}: {otp}')
+        return jsonify({'message': f'OTP sent to {digits}', 'dev_otp': otp}), 200
+
+    return jsonify({'message': 'Invalid OTP type. Must be email or phone.'}), 400
+
+
+@auth_bp.route('/verify-otp', methods=['POST'])
+@rate_limit(max_calls=10, window_seconds=60)
+def verify_otp():
+    data = request.get_json() or {}
+    otp_type = data.get('type')
+    value = (data.get('value') or '').strip()
+    submitted = (data.get('otp') or '').strip()
+
+    if not submitted:
+        return jsonify({'message': 'OTP is required.'}), 400
+
+    if otp_type == 'email':
+        key = f'email:{value.lower()}'
+    elif otp_type == 'phone':
+        key = f'phone:{re.sub(r"\\D", "", value)}'
+    else:
+        return jsonify({'message': 'Invalid OTP type.'}), 400
+
+    success, error = _verify_otp(key, submitted)
+    if success:
+        return jsonify({'message': 'Verified successfully.', 'verified': True}), 200
+    return jsonify({'message': error, 'verified': False}), 400
+
 
 # ── Password validation ─────────────────────────────────────────────────────
 
