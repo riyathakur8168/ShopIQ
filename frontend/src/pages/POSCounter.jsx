@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { getProducts, getCustomers, addSale, addCredit, createInvoice, addCustomer, getCategories } from '../services/api';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { getProducts, getCustomers, addSale, addCredit, createInvoice, addCustomer, getCategories, checkCustomerPhone } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
 export default function POSCounter({ setActiveTab }) {
@@ -13,7 +13,9 @@ export default function POSCounter({ setActiveTab }) {
   // Customer State
   const [customerMode, setCustomerMode] = useState('Walk-in'); // 'Walk-in', 'Existing'
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', address: '' });
+  const [newCustomer, setNewCustomer] = useState({ firstName: '', lastName: '', phone: '', address: '' });
+  const [newCustomerErrors, setNewCustomerErrors] = useState({ firstName: '', lastName: '', phone: '' });
+  const [newCustomerTouched, setNewCustomerTouched] = useState({ firstName: false, lastName: false, phone: false });
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   
   const [paymentMethod, setPaymentMethod] = useState('Cash');
@@ -40,9 +42,23 @@ export default function POSCounter({ setActiveTab }) {
     });
   }, [toast]);
 
+  const modalFirstNameInputRef = useRef(null);
+  const modalLastNameInputRef = useRef(null);
+  const modalPhoneInputRef = useRef(null);
+
+  useEffect(() => {
+    if (showNewCustomerModal) {
+      setTimeout(() => {
+        modalFirstNameInputRef.current?.focus();
+      }, 100);
+    }
+  }, [showNewCustomerModal]);
+
   const handleModeChange = (mode) => {
     if (mode === 'New') {
       setShowNewCustomerModal(true);
+      setNewCustomerErrors({ firstName: '', lastName: '', phone: '' });
+      setNewCustomerTouched({ firstName: false, lastName: false, phone: false });
     } else {
       setCustomerMode(mode);
       if (mode === 'Walk-in') {
@@ -50,6 +66,111 @@ export default function POSCounter({ setActiveTab }) {
       }
     }
   };
+
+  const validateFirstName = (val) => {
+    const trimmed = val.trim();
+    if (!trimmed) return "First Name is required.";
+    if (trimmed.length < 2 || trimmed.length > 30 || !/^[A-Za-z]+$/.test(trimmed)) {
+      return "Please enter a valid first name using letters only.";
+    }
+    return "";
+  };
+
+  const validateLastName = (val) => {
+    const trimmed = val.trim();
+    if (!trimmed) return "";
+    if (trimmed.length < 2 || trimmed.length > 30 || !/^[A-Za-z]+$/.test(trimmed)) {
+      return "Please enter a valid last name using letters only.";
+    }
+    return "";
+  };
+
+  const validatePhone = (val) => {
+    const digits = val.replace(/\D/g, '');
+    if (!digits) return "Mobile Number is required.";
+    if (digits.length !== 10 || !/^[6-9]/.test(digits)) {
+      return "Please enter a valid 10-digit Indian mobile number.";
+    }
+    return "";
+  };
+
+  const formatName = (str) => {
+    const trimmed = str.trim();
+    if (!trimmed) return "";
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  };
+
+  const handleNewCustomerFirstNameChange = (val) => {
+    const cleanVal = val.replace(/[^A-Za-z]/g, '');
+    setNewCustomer(c => ({ ...c, firstName: cleanVal }));
+    setNewCustomerTouched(t => ({ ...t, firstName: true }));
+    setNewCustomerErrors(e => ({ ...e, firstName: validateFirstName(cleanVal) }));
+  };
+
+  const handleNewCustomerFirstNameBlur = () => {
+    if (newCustomer.firstName) {
+      const formatted = formatName(newCustomer.firstName);
+      setNewCustomer(c => ({ ...c, firstName: formatted }));
+      setNewCustomerErrors(e => ({ ...e, firstName: validateFirstName(formatted) }));
+    }
+  };
+
+  const handleNewCustomerLastNameChange = (val) => {
+    const cleanVal = val.replace(/[^A-Za-z]/g, '');
+    setNewCustomer(c => ({ ...c, lastName: cleanVal }));
+    setNewCustomerTouched(t => ({ ...t, lastName: true }));
+    setNewCustomerErrors(e => ({ ...e, lastName: validateLastName(cleanVal) }));
+  };
+
+  const handleNewCustomerLastNameBlur = () => {
+    if (newCustomer.lastName) {
+      const formatted = formatName(newCustomer.lastName);
+      setNewCustomer(c => ({ ...c, lastName: formatted }));
+      setNewCustomerErrors(e => ({ ...e, lastName: validateLastName(formatted) }));
+    }
+  };
+
+  const handleNewCustomerFirstNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      modalLastNameInputRef.current?.focus();
+    }
+  };
+
+  const handleNewCustomerLastNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      modalPhoneInputRef.current?.focus();
+    }
+  };
+
+  const handleNewCustomerPhoneChange = async (val) => {
+    const digits = val.replace(/\D/g, '').slice(0, 10);
+    setNewCustomer(c => ({ ...c, phone: digits }));
+    setNewCustomerTouched(t => ({ ...t, phone: true }));
+    
+    const phoneErr = validatePhone(digits);
+    if (phoneErr) {
+      setNewCustomerErrors(e => ({ ...e, phone: phoneErr }));
+    } else {
+      setNewCustomerErrors(e => ({ ...e, phone: '' }));
+      try {
+        const res = await checkCustomerPhone(digits);
+        if (res.data.exists) {
+          setNewCustomerErrors(e => ({ ...e, phone: "A customer with this mobile number already exists." }));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const isNewCustomerFormValid = 
+    !newCustomerErrors.firstName && 
+    !newCustomerErrors.lastName && 
+    !newCustomerErrors.phone && 
+    newCustomer.firstName.trim() && 
+    newCustomer.phone.trim();
 
   const filteredProducts = useMemo(() => {
     let filtered = products;
@@ -576,25 +697,58 @@ export default function POSCounter({ setActiveTab }) {
             
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Customer Name *</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">First Name <span className="text-red-500">*</span></label>
                 <input 
+                  ref={modalFirstNameInputRef}
                   type="text" 
-                  placeholder="Enter full name" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all shadow-inner"
-                  value={newCustomer.name}
-                  onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}
+                  placeholder="Enter first name" 
+                  className={`w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:bg-white transition-all shadow-inner ${
+                    newCustomerTouched.firstName && newCustomerErrors.firstName ? 'border-red-400 focus:ring-red-400' : 'border-slate-200 focus:ring-primary-500'
+                  }`}
+                  value={newCustomer.firstName}
+                  onChange={e => handleNewCustomerFirstNameChange(e.target.value)}
+                  onBlur={handleNewCustomerFirstNameBlur}
+                  onKeyDown={handleNewCustomerFirstNameKeyDown}
                 />
+                {newCustomerTouched.firstName && newCustomerErrors.firstName && (
+                  <p className="text-[10px] text-red-500 font-semibold mt-1">{newCustomerErrors.firstName}</p>
+                )}
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Number</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Last Name (Optional)</label>
                 <input 
+                  ref={modalLastNameInputRef}
                   type="text" 
-                  placeholder="Enter mobile number" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all shadow-inner"
-                  value={newCustomer.phone}
-                  onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}
+                  placeholder="Enter last name" 
+                  className={`w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:bg-white transition-all shadow-inner ${
+                    newCustomerTouched.lastName && newCustomerErrors.lastName ? 'border-red-400 focus:ring-red-400' : 'border-slate-200 focus:ring-primary-500'
+                  }`}
+                  value={newCustomer.lastName}
+                  onChange={e => handleNewCustomerLastNameChange(e.target.value)}
+                  onBlur={handleNewCustomerLastNameBlur}
+                  onKeyDown={handleNewCustomerLastNameKeyDown}
                 />
+                {newCustomerTouched.lastName && newCustomerErrors.lastName && (
+                  <p className="text-[10px] text-red-500 font-semibold mt-1">{newCustomerErrors.lastName}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Number <span className="text-red-500">*</span></label>
+                <input 
+                  ref={modalPhoneInputRef}
+                  type="text" 
+                  placeholder="Enter 10-digit mobile number" 
+                  className={`w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:bg-white transition-all shadow-inner ${
+                    newCustomerTouched.phone && newCustomerErrors.phone ? 'border-red-400 focus:ring-red-400' : 'border-slate-200 focus:ring-primary-500'
+                  }`}
+                  value={newCustomer.phone}
+                  onChange={e => handleNewCustomerPhoneChange(e.target.value)}
+                />
+                {newCustomerTouched.phone && newCustomerErrors.phone && (
+                  <p className="text-[10px] text-red-500 font-semibold mt-1">{newCustomerErrors.phone}</p>
+                )}
               </div>
 
               <div>
@@ -613,20 +767,48 @@ export default function POSCounter({ setActiveTab }) {
               <button 
                 onClick={() => {
                   setShowNewCustomerModal(false);
-                  setNewCustomer({ name: '', phone: '', address: '' });
+                  setNewCustomer({ firstName: '', lastName: '', phone: '', address: '' });
+                  setNewCustomerErrors({ firstName: '', lastName: '', phone: '' });
+                  setNewCustomerTouched({ firstName: false, lastName: false, phone: false });
                 }}
                 className="flex-1 py-3 border border-slate-200 bg-white rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
               >
                 Cancel
               </button>
               <button 
+                disabled={!isNewCustomerFormValid}
                 onClick={async () => {
-                  if (!newCustomer.name.trim()) {
-                    return toast('Customer name is required', 'error');
+                  const firstErr = validateFirstName(newCustomer.firstName);
+                  if (firstErr) {
+                    setNewCustomerErrors(e => ({ ...e, firstName: firstErr }));
+                    setNewCustomerTouched(t => ({ ...t, firstName: true }));
+                    modalFirstNameInputRef.current?.focus();
+                    return;
                   }
+
+                  const lastErr = validateLastName(newCustomer.lastName);
+                  if (lastErr) {
+                    setNewCustomerErrors(e => ({ ...e, lastName: lastErr }));
+                    setNewCustomerTouched(t => ({ ...t, lastName: true }));
+                    modalLastNameInputRef.current?.focus();
+                    return;
+                  }
+
+                  const phoneErr = validatePhone(newCustomer.phone);
+                  if (phoneErr) {
+                    setNewCustomerErrors(e => ({ ...e, phone: phoneErr }));
+                    setNewCustomerTouched(t => ({ ...t, phone: true }));
+                    modalPhoneInputRef.current?.focus();
+                    return;
+                  }
+
+                  const fName = formatName(newCustomer.firstName);
+                  const lName = formatName(newCustomer.lastName);
+
                   try {
                     const cRes = await addCustomer({
-                      name: newCustomer.name.trim(),
+                      first_name: fName,
+                      last_name: lName,
                       phone: newCustomer.phone.trim(),
                       address: newCustomer.address.trim(),
                     });
@@ -635,14 +817,22 @@ export default function POSCounter({ setActiveTab }) {
                     setSelectedCustomer(savedCustomer);
                     setCustomerMode('Existing');
                     setShowNewCustomerModal(false);
-                    setNewCustomer({ name: '', phone: '', address: '' });
-                    toast(`Customer "${savedCustomer.name}" saved successfully!`, 'success');
+                    setNewCustomer({ firstName: '', lastName: '', phone: '', address: '' });
+                    setNewCustomerErrors({ firstName: '', lastName: '', phone: '' });
+                    setNewCustomerTouched({ firstName: false, lastName: false, phone: false });
+                    toast('Customer added successfully.', 'success');
                   } catch (err) {
-                    console.error(err);
-                    toast(err.response?.data?.message || 'Failed to save customer', 'error');
+                    const backendMsg = err.response?.data?.message || '';
+                    if (backendMsg.includes('already exists')) {
+                      setNewCustomerErrors(prev => ({ ...prev, phone: "A customer with this mobile number already exists." }));
+                      setNewCustomerTouched(prev => ({ ...prev, phone: true }));
+                      modalPhoneInputRef.current?.focus();
+                    } else {
+                      toast(backendMsg || 'Failed to save customer', 'error');
+                    }
                   }
                 }}
-                className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold transition-colors shadow-md shadow-primary-600/20"
+                className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold transition-colors shadow-md shadow-primary-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Save Customer
               </button>

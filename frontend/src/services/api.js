@@ -29,6 +29,9 @@ export const setupBusiness = (data) => API.post('/auth/business-setup', data);
 export const getMe = () => API.get('/auth/me');
 export const sendOtp = (type, value) => API.post('/auth/send-otp', { type, value });
 export const verifyOtp = (type, value, otp) => API.post('/auth/verify-otp', { type, value, otp });
+export const sendForgotPasswordOtp = (type, value) => API.post('/auth/forgot-password/send-otp', { type, value });
+export const verifyForgotPasswordOtp = (type, value, otp) => API.post('/auth/forgot-password/verify-otp', { type, value, otp });
+export const resetForgotPassword = (type, value, otp, password) => API.post('/auth/forgot-password/reset', { type, value, otp, password });
 
 // Products
 export const getProducts = (params) => API.get('/products/', { params });
@@ -69,6 +72,7 @@ export const deleteCustomer = (id) => API.delete(`/customers/${id}`);
 export const getCustomer = (id) => API.get(`/customers/${id}`);
 export const addCredit = (id, data) => API.post(`/customers/${id}/credit`, data);
 export const recordPayment = (id, data) => API.post(`/customers/${id}/payment`, data);
+export const checkCustomerPhone = (phone, excludeId) => API.get('/customers/check-phone', { params: { phone, exclude_id: excludeId } });
 
 // Suppliers
 export const getSuppliers = (params) => API.get('/suppliers/', { params });

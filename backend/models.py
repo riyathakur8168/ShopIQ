@@ -144,6 +144,8 @@ class Customer(db.Model):
     __tablename__ = 'customers'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    first_name = db.Column(db.String(100), default='')
+    last_name = db.Column(db.String(100), default='')
     phone = db.Column(db.String(20), default='')
     address = db.Column(db.String(255), default='')
     total_credit = db.Column(db.Float, default=0)
@@ -159,9 +161,14 @@ class Customer(db.Model):
 
     def to_dict(self):
         return {
-            'id': self.id, 'name': self.name,
-            'phone': self.phone, 'address': self.address,
-            'total_credit': self.total_credit, 'total_paid': self.total_paid,
+            'id': self.id,
+            'name': self.name or f"{self.first_name} {self.last_name}".strip(),
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'phone': self.phone,
+            'address': self.address,
+            'total_credit': self.total_credit,
+            'total_paid': self.total_paid,
             'balance': self.balance,
             # status: pending means they owe money, cleared means fully paid
             'status': 'cleared' if self.balance <= 0 else 'pending',

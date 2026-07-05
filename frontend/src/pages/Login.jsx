@@ -69,6 +69,30 @@ function validateConfirmPassword(p, cp) {
   return '';
 }
 
+function validateForgotPhone(v) {
+  if (!v || !v.trim()) return 'Mobile number is required.';
+  const digits = v.trim();
+  if (!DIGIT_ONLY.test(digits) || digits.length !== 10 || !/^[6-9]/.test(digits)) {
+    return 'Please enter a valid 10-digit Indian mobile number.';
+  }
+  return '';
+}
+
+function validateForgotEmail(v) {
+  if (!v || !v.trim()) return 'Email address is required.';
+  if (!EMAIL_RE.test(v.trim())) return 'Please enter a valid email address.';
+  return '';
+}
+
+function validateForgotNewPassword(v) {
+  if (!v) return 'Password is required.';
+  if (v.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[A-Za-z]/.test(v) || !/\d/.test(v)) {
+    return 'Password must contain both letters and numbers.';
+  }
+  return '';
+}
+
 // ─── Reusable field error message ─────────────────────────────────────────────
 
 function FieldError({ msg }) {
@@ -284,6 +308,38 @@ export default function Login() {
   const [emailVerified, setEmailVerified] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
 
+  // Forgot Password State
+  const [forgotStep, setForgotStep] = useState('select_method'); // 'select_method' | 'input_value' | 'verify_otp' | 'reset_password'
+  const [forgotMethod, setForgotMethod] = useState('email'); // 'email' | 'phone'
+  const [forgotValue, setForgotValue] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotPassword, setForgotPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [forgotDevOtp, setForgotDevOtp] = useState('');
+  const [forgotErrors, setForgotErrors] = useState({});
+  const [forgotTouched, setForgotTouched] = useState({});
+  const [forgotTimer, setForgotTimer] = useState(0);
+
+  const forgotTimerRef = useRef(null);
+
+  const startForgotTimer = () => {
+    setForgotTimer(300); // 5 minutes
+    clearInterval(forgotTimerRef.current);
+    forgotTimerRef.current = setInterval(() => {
+      setForgotTimer(t => {
+        if (t <= 1) {
+          clearInterval(forgotTimerRef.current);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => clearInterval(forgotTimerRef.current);
+  }, []);
+
   const { login } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -408,6 +464,19 @@ export default function Login() {
     setShowPassword(false);
     setEmailVerified(false);
     setPhoneVerified(false);
+    
+    // Clear forgot password states
+    setForgotStep('select_method');
+    setForgotMethod('email');
+    setForgotValue('');
+    setForgotOtp('');
+    setForgotPassword('');
+    setForgotConfirmPassword('');
+    setForgotDevOtp('');
+    setForgotErrors({});
+    setForgotTouched({});
+    setForgotTimer(0);
+    clearInterval(forgotTimerRef.current);
   };
 
   return (
@@ -498,222 +567,492 @@ export default function Login() {
                   <path d="M 0 70 Q 50 40 100 50 T 200 20 T 300 30 L 300 80 L 0 80 Z" fill="url(#chartGrad)" />
                   <path d="M 0 70 Q 50 40 100 50 T 200 20 T 300 30" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" />
                   <circle cx="200" cy="20" r="3.5" fill="#2563EB" />
-                  <circle cx="200" cy="20" r="6.5" fill="#2563EB" fillOpacity="0.2" />
-                </svg>
+         <div className="w-full max-w-[420px] bg-white border border-slate-200/80 rounded-3xl p-6 lg:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.015)]">
+          {mode === 'forgot_password' ? (
+            <div>
+              {/* Form Header */}
+              <div className="mb-6">
+                <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">
+                  Reset Password
+                </h2>
+                <p className="text-xs lg:text-sm font-semibold text-slate-500 mt-1">
+                  {forgotStep === 'select_method' && 'Choose a verification method to prove account ownership.'}
+                  {forgotStep === 'input_value' && `Enter your registered ${forgotMethod === 'email' ? 'email address' : 'mobile number'}.`}
+                  {forgotStep === 'verify_otp' && `Verify the code sent to your registered ${forgotMethod === 'email' ? 'email' : 'mobile number'}.`}
+                  {forgotStep === 'reset_password' && 'Enter your new secure password.'}
+                </p>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Bottom copyright/footer info */}
-        <div className="text-[10px] font-semibold text-slate-400">
-          © {new Date().getFullYear()} ShopIQ Inc. All rights reserved.
-        </div>
-      </div>
-
-      {/* Right Column: Authentication Form (60% width) */}
-      <div className="w-full md:w-[60%] md:h-full bg-[#F8FAFC] flex items-center justify-center p-6 md:p-10 md:overflow-y-auto">
-        <div className="w-full max-w-[420px] bg-white border border-slate-200/80 rounded-3xl p-6 lg:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.015)]">
-          <div>
-            {/* Form Header */}
-            <div className="mb-6">
-              <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">
-                {mode === 'login' ? 'Welcome Back 👋' : 'Create Account ✨'}
-              </h2>
-              <p className="text-xs lg:text-sm font-semibold text-slate-500 mt-1">
-                {mode === 'login' ? 'Sign in to continue managing your business.' : 'Sign up to start managing your business.'}
-              </p>
-            </div>
-
-            {/* Auth Form */}
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-              {mode === 'signup' && (
-                <>
-                  {/* First & Last Name */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">First Name *</label>
-                      <input
-                        className={inputCls(touched.first_name && errors.first_name)}
-                        type="text"
-                        placeholder="Ramesh"
-                        value={form.first_name}
-                        onChange={e => handleChange('first_name', e.target.value)}
-                        onBlur={() => handleBlur('first_name')}
-                      />
-                      <FieldError msg={touched.first_name && errors.first_name} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Last Name</label>
-                      <input
-                        className={inputCls(touched.last_name && errors.last_name)}
-                        type="text"
-                        placeholder="Kumar"
-                        value={form.last_name}
-                        onChange={e => handleChange('last_name', e.target.value)}
-                        onBlur={() => handleBlur('last_name')}
-                      />
-                      <FieldError msg={touched.last_name && errors.last_name} />
-                    </div>
-                  </div>
-
-                  {/* Phone */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Mobile Number *</label>
-                    <input
-                      className={inputCls(touched.phone && errors.phone)}
-                      type="tel"
-                      placeholder="9876543210"
-                      maxLength={10}
-                      value={form.phone}
-                      onChange={e => { handlePhoneChange(e.target.value); setPhoneVerified(false); }}
-                      onBlur={() => handleBlur('phone')}
-                    />
-                    <FieldError msg={touched.phone && errors.phone} />
-                    {!errors.phone && form.phone.length === 10 && (
-                      <OtpVerifier
-                        type="phone"
-                        value={form.phone}
-                        isValueValid={!validatePhone(form.phone)}
-                        onVerified={() => setPhoneVerified(true)}
-                      />
-                    )}
-                  </div>
-                </>
-              )}
-              
-              {/* Email */}
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address</label>
-                <input
-                  className={inputCls(mode === 'signup' && touched.email && errors.email)}
-                  type="email"
-                  placeholder="owner@myshop.com"
-                  value={form.email}
-                  onChange={e => { handleChange('email', e.target.value); setEmailVerified(false); }}
-                  onBlur={() => mode === 'signup' && handleBlur('email')}
-                  required
-                />
-                {mode === 'signup' && <FieldError msg={touched.email && errors.email} />}
-                {mode === 'signup' && !errors.email && form.email && (
-                  <OtpVerifier
-                    type="email"
-                    value={form.email}
-                    isValueValid={!validateEmail(form.email)}
-                    onVerified={() => setEmailVerified(true)}
-                  />
-                )}
-              </div>
-              
-              {/* Password */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Password *</label>
-                  {mode === 'login' && (
-                    <button
-                      type="button"
-                      onClick={() => toast('Password reset link is sent to email.', 'success')}
-                      className="text-xs font-bold text-[#2563EB] hover:text-blue-700 transition-colors"
-                    >
-                      Forgot Password?
-                    </button>
-                  )}
-                </div>
-                
-                <div className="relative">
-                  <input
-                    className={`${inputCls(mode === 'signup' && touched.password && errors.password)} pr-14`}
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={form.password}
-                    onChange={e => handleChange('password', e.target.value)}
-                    onBlur={() => mode === 'signup' && handleBlur('password')}
-                    required
-                  />
+              {forgotStep === 'select_method' && (
+                <div className="space-y-3">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-xs font-extrabold text-slate-400 hover:text-slate-600 transition-colors select-none"
+                    onClick={() => { setForgotMethod('phone'); setForgotStep('input_value'); setForgotValue(''); setForgotErrors({}); setForgotTouched({}); }}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] shadow-sm flex items-center justify-between group"
                   >
-                    {showPassword ? 'HIDE' : 'SHOW'}
+                    <span className="flex items-center gap-3">
+                      <span className="text-lg">📱</span> Reset via Mobile Number
+                    </span>
+                    <span className="text-[#2563EB] opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                   </button>
-                </div>
-
-                {mode === 'signup' && (
-                  <>
-                    {touched.password && errors.password
-                      ? <FieldError msg={errors.password} />
-                      : !errors.password && form.password
-                        ? null
-                        : !form.password && (
-                          <p className="text-[10px] text-slate-400 mt-1">
-                            Min. 8 chars · uppercase · lowercase · number · special char
-                          </p>
-                        )
-                    }
-                    <PasswordStrengthBar password={form.password} />
-                  </>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              {mode === 'signup' && (
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Confirm Password *</label>
-                  <input
-                    className={inputCls(touched.confirm_password && errors.confirm_password)}
-                    type="password"
-                    placeholder="••••••••"
-                    value={form.confirm_password}
-                    onChange={e => handleChange('confirm_password', e.target.value)}
-                    onBlur={() => handleBlur('confirm_password')}
-                    required
-                  />
-                  <FieldError msg={touched.confirm_password && errors.confirm_password} />
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMethod('email'); setForgotStep('input_value'); setForgotValue(''); setForgotErrors({}); setForgotTouched({}); }}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] shadow-sm flex items-center justify-between group"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="text-lg">✉</span> Reset via Email Address
+                    </span>
+                    <span className="text-[#2563EB] opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                  </button>
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading || (mode === 'signup' && (!emailVerified || !phoneVerified))}
-                className="w-full bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm mt-2"
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="spinner w-4 h-4 border-2 border-white border-t-transparent"></span>
-                    <span>Please wait...</span>
+              {forgotStep === 'input_value' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      {forgotMethod === 'email' ? 'Email Address' : 'Mobile Number'} *
+                    </label>
+                    <input
+                      className={inputCls(forgotTouched.value && forgotErrors.value)}
+                      type={forgotMethod === 'email' ? 'email' : 'text'}
+                      placeholder={forgotMethod === 'email' ? 'owner@myshop.com' : '9876543210'}
+                      value={forgotValue}
+                      onChange={e => {
+                        let val = e.target.value;
+                        if (forgotMethod === 'phone') {
+                          val = val.replace(/\D/g, '').slice(0, 10);
+                        }
+                        setForgotValue(val);
+                        setForgotTouched(prev => ({ ...prev, value: true }));
+                        const err = forgotMethod === 'email' ? validateForgotEmail(val) : validateForgotPhone(val);
+                        setForgotErrors(prev => ({ ...prev, value: err }));
+                      }}
+                      autoFocus
+                    />
+                    {forgotTouched.value && forgotErrors.value && (
+                      <p className="text-[10px] text-red-500 font-semibold mt-1">{forgotErrors.value}</p>
+                    )}
                   </div>
-                ) : mode === 'login' ? 'Sign In' : 'Create Account'}
-              </button>
-            </form>
-          </div>
 
-          {/* Toggle Login/Signup Links */}
-          <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-            {mode === 'login' ? (
-              <p className="text-sm font-semibold text-slate-500">
-                New to ShopIQ?{' '}
-                <button
-                  type="button"
-                  onClick={() => switchMode('signup')}
-                  className="text-[#2563EB] hover:text-blue-700 font-extrabold transition-colors"
-                >
-                  Create Account
-                </button>
-              </p>
-            ) : (
-              <p className="text-sm font-semibold text-slate-500">
-                Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const err = forgotMethod === 'email' ? validateForgotEmail(forgotValue) : validateForgotPhone(forgotValue);
+                      if (err) {
+                        setForgotErrors({ value: err });
+                        setForgotTouched({ value: true });
+                        return;
+                      }
+                      setLoading(true);
+                      try {
+                        const res = await api.sendForgotPasswordOtp(forgotMethod, forgotValue);
+                        setForgotDevOtp(res.data.dev_otp || '');
+                        toast('If this account exists, an OTP has been sent.', 'success');
+                        startForgotTimer();
+                        setForgotStep('verify_otp');
+                        setForgotOtp('');
+                      } catch (err) {
+                        toast(err.response?.data?.message || 'Failed to request OTP.', 'error');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading || (forgotMethod === 'email' ? validateForgotEmail(forgotValue) : validateForgotPhone(forgotValue))}
+                    className="w-full bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {loading ? 'Sending...' : 'Send OTP'}
+                  </button>
+                </div>
+              )}
+
+              {forgotStep === 'verify_otp' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Enter 6-Digit OTP *
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="••••••"
+                      value={forgotOtp}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setForgotOtp(val);
+                        setForgotTouched(prev => ({ ...prev, otp: true }));
+                        const err = val.length === 6 ? '' : 'Please enter the 6-digit OTP.';
+                        setForgotErrors(prev => ({ ...prev, otp: err }));
+                      }}
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] tracking-[0.3em] shadow-inner text-center"
+                      autoFocus
+                    />
+                    {forgotTouched.otp && forgotErrors.otp && (
+                      <p className="text-[10px] text-red-500 font-semibold mt-1 text-center">{forgotErrors.otp}</p>
+                    )}
+                  </div>
+
+                  {/* Timer + Resend */}
+                  <div className="flex items-center justify-between text-xs px-1">
+                    {forgotTimer > 0 ? (
+                      <span className="text-[10px] font-bold text-slate-500">
+                        Expires in <span className="text-red-500">{Math.floor(forgotTimer / 60)}:{String(forgotTimer % 60).padStart(2, '0')}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-red-500">OTP Expired</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setLoading(true);
+                        try {
+                          const res = await api.sendForgotPasswordOtp(forgotMethod, forgotValue);
+                          setForgotDevOtp(res.data.dev_otp || '');
+                          toast('If this account exists, an OTP has been sent.', 'success');
+                          startForgotTimer();
+                        } catch {
+                          toast('Failed to resend OTP.', 'error');
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                      disabled={forgotTimer > 0 || loading}
+                      className="text-[10px] font-bold text-[#2563EB] hover:underline disabled:text-slate-400 disabled:cursor-not-allowed disabled:no-underline"
+                    >
+                      Resend OTP
+                    </button>
+                  </div>
+
+                  {/* Dev OTP Box */}
+                  {forgotDevOtp && (
+                    <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">
+                      [DEV] Your OTP is: <span className="tracking-widest">{forgotDevOtp}</span>
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (forgotOtp.length < 6) return;
+                      setLoading(true);
+                      try {
+                        await api.verifyForgotPasswordOtp(forgotMethod, forgotValue, forgotOtp);
+                        toast('OTP verified successfully.', 'success');
+                        setForgotStep('reset_password');
+                        setForgotPassword('');
+                        setForgotConfirmPassword('');
+                        setForgotErrors({});
+                        setForgotTouched({});
+                      } catch (err) {
+                        toast(err.response?.data?.message || 'Incorrect or expired OTP.', 'error');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading || forgotOtp.length < 6}
+                    className="w-full bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {loading ? 'Verifying...' : 'Verify OTP'}
+                  </button>
+                </div>
+              )}
+
+              {forgotStep === 'reset_password' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Password *</label>
+                    <input
+                      className={inputCls(forgotTouched.password && forgotErrors.password)}
+                      type="password"
+                      placeholder="••••••••"
+                      value={forgotPassword}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForgotPassword(val);
+                        setForgotTouched(prev => ({ ...prev, password: true }));
+                        setForgotErrors(prev => ({ ...prev, password: validateForgotNewPassword(val) }));
+                      }}
+                      autoFocus
+                    />
+                    {forgotTouched.password && forgotErrors.password && (
+                      <p className="text-[10px] text-red-500 font-semibold mt-1">{forgotErrors.password}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Confirm New Password *</label>
+                    <input
+                      className={inputCls(forgotTouched.confirmPassword && forgotErrors.confirmPassword)}
+                      type="password"
+                      placeholder="••••••••"
+                      value={forgotConfirmPassword}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForgotConfirmPassword(val);
+                        setForgotTouched(prev => ({ ...prev, confirmPassword: true }));
+                        setForgotErrors(prev => ({ ...prev, confirmPassword: validateForgotConfirmPassword(forgotPassword, val) }));
+                      }}
+                    />
+                    {forgotTouched.confirmPassword && forgotErrors.confirmPassword && (
+                      <p className="text-[10px] text-red-500 font-semibold mt-1">{forgotErrors.confirmPassword}</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const passErr = validateForgotNewPassword(forgotPassword);
+                      const confErr = validateForgotConfirmPassword(forgotPassword, forgotConfirmPassword);
+                      if (passErr || confErr) {
+                        setForgotErrors({ password: passErr, confirmPassword: confErr });
+                        setForgotTouched({ password: true, confirmPassword: true });
+                        return;
+                      }
+                      setLoading(true);
+                      try {
+                        await api.resetForgotPassword(forgotMethod, forgotValue, forgotOtp, forgotPassword);
+                        toast('Password updated successfully!', 'success');
+                        switchMode('login');
+                      } catch (err) {
+                        toast(err.response?.data?.message || 'Failed to update password.', 'error');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading || !forgotPassword || !forgotConfirmPassword || forgotErrors.password || forgotErrors.confirmPassword}
+                    className="w-full bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {loading ? 'Updating...' : 'Update Password'}
+                  </button>
+                </div>
+              )}
+
+              {/* Back to Sign In Link */}
+              <div className="mt-6 border-t border-slate-100 pt-4 text-center">
                 <button
                   type="button"
                   onClick={() => switchMode('login')}
-                  className="text-[#2563EB] hover:text-blue-700 font-extrabold transition-colors"
+                  className="text-xs font-bold text-[#2563EB] hover:text-blue-700 transition-colors"
                 >
-                  Sign In
+                  ← Back to Sign In
                 </button>
-              </p>
-            )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                {/* Form Header */}
+                <div className="mb-6">
+                  <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">
+                    {mode === 'login' ? 'Welcome Back 👋' : 'Create Account ✨'}
+                  </h2>
+                  <p className="text-xs lg:text-sm font-semibold text-slate-500 mt-1">
+                    {mode === 'login' ? 'Sign in to continue managing your business.' : 'Sign up to start managing your business.'}
+                  </p>
+                </div>
+
+                {/* Auth Form */}
+                <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                  {mode === 'signup' && (
+                    <>
+                      {/* First & Last Name */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">First Name *</label>
+                          <input
+                            className={inputCls(touched.first_name && errors.first_name)}
+                            type="text"
+                            placeholder="Ramesh"
+                            value={form.first_name}
+                            onChange={e => handleChange('first_name', e.target.value)}
+                            onBlur={() => handleBlur('first_name')}
+                          />
+                          <FieldError msg={touched.first_name && errors.first_name} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Last Name</label>
+                          <input
+                            className={inputCls(touched.last_name && errors.last_name)}
+                            type="text"
+                            placeholder="Kumar"
+                            value={form.last_name}
+                            onChange={e => handleChange('last_name', e.target.value)}
+                            onBlur={() => handleBlur('last_name')}
+                          />
+                          <FieldError msg={touched.last_name && errors.last_name} />
+                        </div>
+                      </div>
+
+                      {/* Phone */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Mobile Number *</label>
+                        <input
+                          className={inputCls(touched.phone && errors.phone)}
+                          type="tel"
+                          placeholder="9876543210"
+                          maxLength={10}
+                          value={form.phone}
+                          onChange={e => { handlePhoneChange(e.target.value); setPhoneVerified(false); }}
+                          onBlur={() => handleBlur('phone')}
+                        />
+                        <FieldError msg={touched.phone && errors.phone} />
+                        {!errors.phone && form.phone.length === 10 && (
+                          <OtpVerifier
+                            type="phone"
+                            value={form.phone}
+                            isValueValid={!validatePhone(form.phone)}
+                            onVerified={() => setPhoneVerified(true)}
+                          />
+                        )}
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Email */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address</label>
+                    <input
+                      className={inputCls(mode === 'signup' && touched.email && errors.email)}
+                      type="email"
+                      placeholder="owner@myshop.com"
+                      value={form.email}
+                      onChange={e => { handleChange('email', e.target.value); setEmailVerified(false); }}
+                      onBlur={() => mode === 'signup' && handleBlur('email')}
+                      required
+                    />
+                    {mode === 'signup' && <FieldError msg={touched.email && errors.email} />}
+                    {mode === 'signup' && !errors.email && form.email && (
+                      <OtpVerifier
+                        type="email"
+                        value={form.email}
+                        isValueValid={!validateEmail(form.email)}
+                        onVerified={() => setEmailVerified(true)}
+                      />
+                    )}
+                  </div>
+                  
+                  {/* Password */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Password *</label>
+                      {mode === 'login' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode('forgot_password');
+                            setForgotStep('select_method');
+                            setForgotValue('');
+                            setForgotOtp('');
+                            setForgotPassword('');
+                            setForgotConfirmPassword('');
+                            setForgotDevOtp('');
+                            setForgotErrors({});
+                            setForgotTouched({});
+                          }}
+                          className="text-xs font-bold text-[#2563EB] hover:text-blue-700 transition-colors"
+                        >
+                          Forgot Password?
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="relative">
+                      <input
+                        className={`${inputCls(mode === 'signup' && touched.password && errors.password)} pr-14`}
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={form.password}
+                        onChange={e => handleChange('password', e.target.value)}
+                        onBlur={() => mode === 'signup' && handleBlur('password')}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-xs font-extrabold text-slate-400 hover:text-slate-600 transition-colors select-none"
+                      >
+                        {showPassword ? 'HIDE' : 'SHOW'}
+                      </button>
+                    </div>
+
+                    {mode === 'signup' && (
+                      <>
+                        {touched.password && errors.password
+                          ? <FieldError msg={errors.password} />
+                          : !errors.password && form.password
+                            ? null
+                            : !form.password && (
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                Min. 8 chars · uppercase · lowercase · number · special char
+                              </p>
+                            )
+                        }
+                        <PasswordStrengthBar password={form.password} />
+                      </>
+                    )}
+                  </div>
+
+                  {/* Confirm Password */}
+                  {mode === 'signup' && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Confirm Password *</label>
+                      <input
+                        className={inputCls(touched.confirm_password && errors.confirm_password)}
+                        type="password"
+                        placeholder="••••••••"
+                        value={form.confirm_password}
+                        onChange={e => { handleChange('confirm_password', e.target.value) }}
+                        onBlur={() => handleBlur('confirm_password')}
+                        required
+                      />
+                      <FieldError msg={touched.confirm_password && errors.confirm_password} />
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading || (mode === 'signup' && (!emailVerified || !phoneVerified))}
+                    className="w-full bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm mt-2"
+                  >
+                    {loading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="spinner w-4 h-4 border-2 border-white border-t-transparent"></span>
+                        <span>Please wait...</span>
+                      </div>
+                    ) : mode === 'login' ? 'Sign In' : 'Create Account'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Toggle Login/Signup Links */}
+              <div className="mt-6 border-t border-slate-100 pt-4 text-center">
+                {mode === 'login' ? (
+                  <p className="text-sm font-semibold text-slate-500">
+                    New to ShopIQ?{' '}
+                    <button
+                      type="button"
+                      onClick={() => switchMode('signup')}
+                      className="text-[#2563EB] hover:text-blue-700 font-extrabold transition-colors"
+                    >
+                      Create Account
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-sm font-semibold text-slate-500">
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => switchMode('login')}
+                      className="text-[#2563EB] hover:text-blue-700 font-extrabold transition-colors"
+                    >
+                      Sign In
+                    </button>
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
       

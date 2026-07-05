@@ -72,6 +72,13 @@ def create_app(config_class=Config):
             "added business_setup_completed to users"
         )
 
+        _add_column_if_missing(
+            "SELECT first_name FROM customers LIMIT 1",
+            """ALTER TABLE customers ADD COLUMN first_name VARCHAR(100) DEFAULT '';
+               ALTER TABLE customers ADD COLUMN last_name VARCHAR(100) DEFAULT ''""",
+            "added first_name and last_name to customers"
+        )
+
         # ── Data isolation: user_id columns ───────────────────────────────────
         _add_column_if_missing(
             "SELECT user_id FROM customers LIMIT 1",

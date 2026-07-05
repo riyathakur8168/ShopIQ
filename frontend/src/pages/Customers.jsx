@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getCustomers, addCustomer, deleteCustomer, getCustomer, addCredit, recordPayment, getProducts, createInvoice, getInvoices } from '../services/api';
+import { useState, useEffect, useRef } from 'react';
+import { getCustomers, addCustomer, deleteCustomer, getCustomer, addCredit, recordPayment, getProducts, createInvoice, getInvoices, checkCustomerPhone } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
 export default function Customers() {
@@ -44,10 +44,17 @@ function DirectoryTab() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', address: '' });
+  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', address: '' });
+  const [errors, setErrors] = useState({ firstName: '', lastName: '', phone: '' });
+  const [touched, setTouched] = useState({ firstName: false, lastName: false, phone: false });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  
+  const firstNameInputRef = useRef(null);
+  const lastNameInputRef = useRef(null);
+  const phoneInputRef = useRef(null);
+  
   const { toast } = useToast();
 
   const load = async () => {
@@ -70,13 +77,174 @@ function DirectoryTab() {
     return () => clearTimeout(timer);
   }, [search, page]);
 
+  useEffect(() => {
+    if (showAddForm) {
+      setTimeout(() => {
+        firstNameInputRef.current?.focus();
+      }, 100);
+    }
+  }, [showAddForm]);
+
+  const validateFirstName = (val) => {
+    const trimmed = val.trim();
+    if (!trimmed) return "First Name is required.";
+    if (trimmed.length < 2 || trimmed.length > 30 || !/^[A-Za-z]+$/.test(trimmed)) {
+      return "Please enter a valid first name using letters only.";
+    }
+    return "";
+  };
+
+  const validateLastName = (val) => {
+    const trimmed = val.trim();
+    if (!trimmed) return "";
+    if (trimmed.length < 2 || trimmed.length > 30 || !/^[A-Za-z]+$/.test(trimmed)) {
+      return "Please enter a valid last name using letters only.";
+    }
+    return "";
+  };
+
+  const validatePhone = (val) => {
+    const digits = val.replace(/\D/g, '');
+    if (!digits) return "Mobile Number is required.";
+    if (digits.length !== 10 || !/^[6-9]/.test(digits)) {
+      return "Please enter a valid 10-digit Indian mobile number.";
+    }
+    return "";
+  };
+
+  const formatName = (str) => {
+    const trimmed = str.trim();
+    if (!trimmed) return "";
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  };
+
+  const handleFirstNameChange = (val) => {
+    const cleanVal = val.replace(/[^A-Za-z]/g, '');
+    setForm(f => ({ ...f, firstName: cleanVal }));
+    setTouched(t => ({ ...t, firstName: true }));
+    setErrors(e => ({ ...e, firstName: validateFirstName(cleanVal) }));
+  };
+
+  const handleFirstNameBlur = () => {
+    if (form.firstName) {
+      const formatted = formatName(form.firstName);
+      setForm(f => ({ ...f, firstName: formatted }));
+      setErrors(e => ({ ...e, firstName: validateFirstName(formatted) }));
+    }
+  };
+
+  const handleLastNameChange = (val) => {
+    const cleanVal = val.replace(/[^A-Za-z]/g, '');
+    setForm(f => ({ ...f, lastName: cleanVal }));
+    setTouched(t => ({ ...t, lastName: true }));
+    setErrors(e => ({ ...e, lastName: validateLastName(cleanVal) }));
+  };
+
+  const handleLastNameBlur = () => {
+    if (form.lastName) {
+      const formatted = formatName(form.lastName);
+      setForm(f => ({ ...f, lastName: formatted }));
+      setErrors(e => ({ ...e, lastName: validateLastName(formatted) }));
+    }
+  };
+
+  const handleFirstNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      lastNameInputRef.current?.focus();
+    }
+  };
+
+  const handleLastNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      phoneInputRef.current?.focus();
+    }
+  };
+
+  const handlePhoneChange = async (val) => {
+    const digits = val.replace(/\D/g, '').slice(0, 10);
+    setForm(f => ({ ...f, phone: digits }));
+    setTouched(t => ({ ...t, phone: true }));
+    
+    const phoneErr = validatePhone(digits);
+    if (phoneErr) {
+      setErrors(e => ({ ...e, phone: phoneErr }));
+    } else {
+      setErrors(e => ({ ...e, phone: '' }));
+      try {
+        const res = await checkCustomerPhone(digits);
+        if (res.data.exists) {
+          setErrors(e => ({ ...e, phone: "A customer with this mobile number already exists." }));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const isFormValid = 
+    !errors.firstName && 
+    !errors.lastName && 
+    !errors.phone && 
+    form.firstName.trim() && 
+    form.phone.trim();
+
   const handleAddCustomer = async (e) => {
     e.preventDefault();
+    
+    const firstErr = validateFirstName(form.firstName);
+    if (firstErr) {
+      setErrors(e => ({ ...e, firstName: firstErr }));
+      setTouched(t => ({ ...t, firstName: true }));
+      firstNameInputRef.current?.focus();
+      return;
+    }
+
+    const lastErr = validateLastName(form.lastName);
+    if (lastErr) {
+      setErrors(e => ({ ...e, lastName: lastErr }));
+      setTouched(t => ({ ...t, lastName: true }));
+      lastNameInputRef.current?.focus();
+      return;
+    }
+
+    const phoneErr = validatePhone(form.phone);
+    if (phoneErr) {
+      setErrors(e => ({ ...e, phone: phoneErr }));
+      setTouched(t => ({ ...t, phone: true }));
+      phoneInputRef.current?.focus();
+      return;
+    }
+
+    // Capitalize and clean name before saving
+    const fName = formatName(form.firstName);
+    const lName = formatName(form.lastName);
+
+    const cleanedForm = {
+      first_name: fName,
+      last_name: lName,
+      phone: form.phone.trim(),
+      address: form.address.trim()
+    };
+
     try {
-      await addCustomer(form);
-      toast('Customer added!', 'success');
-      setShowAddForm(false); setForm({ name: '', phone: '', address: '' }); load();
-    } catch { toast('Failed to add customer', 'error'); }
+      await addCustomer(cleanedForm);
+      toast('Customer added successfully.', 'success');
+      setShowAddForm(false); 
+      setForm({ firstName: '', lastName: '', phone: '', address: '' }); 
+      setErrors({ firstName: '', lastName: '', phone: '' });
+      setTouched({ firstName: false, lastName: false, phone: false });
+      load();
+    } catch (err) { 
+      const backendMsg = err.response?.data?.message || '';
+      if (backendMsg.includes('already exists')) {
+        setErrors(prev => ({ ...prev, phone: "A customer with this mobile number already exists." }));
+        phoneInputRef.current?.focus();
+      } else {
+        toast(backendMsg || 'Failed to add customer', 'error'); 
+      }
+    }
   };
 
   const handleDelete = async (id) => {
@@ -89,19 +257,65 @@ function DirectoryTab() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">Customer Directory</h3>
-        <button className="btn-primary shadow-sm" onClick={() => setShowAddForm(!showAddForm)}>+ Add Customer</button>
+        <button className="btn-primary shadow-sm" onClick={() => {
+          setShowAddForm(!showAddForm);
+          setErrors({ firstName: '', lastName: '', phone: '' });
+          setTouched({ firstName: false, lastName: false, phone: false });
+        }}>
+          {showAddForm ? 'Hide Form' : '+ Add Customer'}
+        </button>
       </div>
 
       {showAddForm && (
         <div className="card p-6 animate-fade-in border-primary-100 shadow-md bg-primary-50/30">
           <h3 className="text-sm font-bold text-slate-900 mb-4">Add New Customer</h3>
           <form onSubmit={handleAddCustomer} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div><label className="input-label">Name</label><input required className="input bg-white border-slate-200" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Customer name" /></div>
-            <div><label className="input-label">Phone</label><input className="input bg-white border-slate-200" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9876543210" /></div>
-            <div><label className="input-label">Address</label><input className="input bg-white border-slate-200" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Colony, City" /></div>
+            <div>
+              <label className="input-label">First Name <span className="text-red-500">*</span></label>
+              <input 
+                ref={firstNameInputRef}
+                required 
+                className={`input bg-white ${touched.firstName && errors.firstName ? 'border-red-400 focus:ring-red-400' : 'border-slate-200'}`} 
+                value={form.firstName} 
+                onChange={e => handleFirstNameChange(e.target.value)} 
+                onBlur={handleFirstNameBlur}
+                onKeyDown={handleFirstNameKeyDown}
+                placeholder="First name" 
+              />
+              {touched.firstName && errors.firstName && <p className="text-[10px] text-red-500 font-semibold mt-1">{errors.firstName}</p>}
+            </div>
+            <div>
+              <label className="input-label">Last Name (Optional)</label>
+              <input 
+                ref={lastNameInputRef}
+                className={`input bg-white ${touched.lastName && errors.lastName ? 'border-red-400 focus:ring-red-400' : 'border-slate-200'}`} 
+                value={form.lastName} 
+                onChange={e => handleLastNameChange(e.target.value)} 
+                onBlur={handleLastNameBlur}
+                onKeyDown={handleLastNameKeyDown}
+                placeholder="Last name" 
+              />
+              {touched.lastName && errors.lastName && <p className="text-[10px] text-red-500 font-semibold mt-1">{errors.lastName}</p>}
+            </div>
+            <div>
+              <label className="input-label">Phone <span className="text-red-500">*</span></label>
+              <input 
+                ref={phoneInputRef}
+                required 
+                className={`input bg-white ${touched.phone && errors.phone ? 'border-red-400 focus:ring-red-400' : 'border-slate-200'}`} 
+                value={form.phone} 
+                onChange={e => handlePhoneChange(e.target.value)} 
+                placeholder="9876543210" 
+              />
+              {touched.phone && errors.phone && <p className="text-[10px] text-red-500 font-semibold mt-1">{errors.phone}</p>}
+            </div>
+            <div className="md:col-span-3">
+              <label className="input-label">Address</label>
+              <input className="input bg-white border-slate-200" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Colony, City" />
+            </div>
             <div className="md:col-span-3 flex gap-3 pt-2">
-              <button type="submit" className="btn-primary">Save Customer</button>
-              <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={!isFormValid} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">Save Customer</button>
+              <button type="button" onClick={() => { setShowAddForm(false); setForm({ firstName: '', lastName: '', phone: '', address: '' }); }} className="btn-secondary">Cancel</button>
             </div>
           </form>
         </div>
@@ -116,9 +330,9 @@ function DirectoryTab() {
           <table className="w-full">
             <thead>
               <tr>
-                <th className="table-header">Name</th>
-                <th className="table-header">Contact</th>
-                <th className="table-header">Outstanding Balance</th>
+                <th className="table-header">Customer Name</th>
+                <th className="table-header">Phone Number</th>
+                <th className="table-header">Address</th>
                 <th className="table-header">Status</th>
                 <th className="table-header text-right">Actions</th>
               </tr>
@@ -128,22 +342,19 @@ function DirectoryTab() {
                 <tr key={c.id} className="table-row">
                   <td className="table-cell font-bold text-slate-900">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">{c.name[0].toUpperCase()}</div>
+                      <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">{(c.name || 'C')[0].toUpperCase()}</div>
                       {c.name}
                     </div>
                   </td>
-                  <td className="table-cell text-slate-600">
-                    <div>{c.phone || 'No phone'}</div>
-                    <div className="text-xs text-slate-400">{c.address}</div>
+                  <td className="table-cell text-slate-600 font-medium">
+                    {c.phone || '-'}
                   </td>
-                  <td className="table-cell font-bold">
-                    <span className={c.balance > 0 ? 'text-red-600' : 'text-green-600'}>
-                      ₹{c.balance}
-                    </span>
+                  <td className="table-cell text-slate-600 text-xs">
+                    {c.address || '-'}
                   </td>
                   <td className="table-cell">
                     <span className={c.balance > 0 ? 'badge badge-warning' : 'badge badge-success'}>
-                      {c.balance > 0 ? 'Outstanding' : 'Has Cleared'}
+                      {c.balance > 0 ? 'Outstanding' : 'Cleared'}
                     </span>
                   </td>
                   <td className="table-cell text-right">
@@ -152,7 +363,7 @@ function DirectoryTab() {
                 </tr>
               ))}
               {customers.length === 0 && (
-                <tr><td colSpan={4} className="text-center text-slate-500 py-8">No customers found.</td></tr>
+                <tr><td colSpan={5} className="text-center text-slate-500 py-8">No customers found.</td></tr>
               )}
             </tbody>
           </table>
@@ -226,22 +437,29 @@ function CreditTab() {
     e.preventDefault();
     try {
       const res = await recordPayment(selectedCustomer.id, paymentForm);
-      toast('Payment recorded!', 'success');
-      setSelectedCustomer(res.data.customer);
+      toast('Payment recorded successfully.', 'success');
+      const updatedCustomer = res.data.customer;
+      if (updatedCustomer.balance <= 0) {
+        setSelectedCustomer(null);
+        setHistory([]);
+      } else {
+        setSelectedCustomer(updatedCustomer);
+        loadHistory(selectedCustomer.id);
+      }
       setPaymentForm({ amount: '', note: '', date: new Date().toISOString().split('T')[0] });
-      loadHistory(selectedCustomer.id); load();
+      load();
     } catch (err) { toast(err.response?.data?.message || 'Failed', 'error'); }
   };
 
+  const unpaidCustomers = customers.filter(c => c.balance > 0);
   const totalPending = customers.reduce((s, c) => s + Math.max(0, c.balance), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[
-          { label: 'Total Customers', value: customers.length, color: 'text-primary-600' },
-          { label: 'Total Pending',   value: `₹${totalPending.toLocaleString()}`, color: 'text-red-600' },
-          { label: 'Cleared Accounts', value: customers.filter(c => c.balance <= 0).length, color: 'text-green-600' },
+          { label: 'Outstanding Accounts', value: unpaidCustomers.length, color: 'text-red-600' },
+          { label: 'Total Pending Dues',   value: `₹${totalPending.toLocaleString()}`, color: 'text-primary-600' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -258,13 +476,13 @@ function CreditTab() {
           </div>
           {loading ? <div className="flex items-center justify-center h-40"><span className="spinner" /></div> : (
             <div className="divide-y divide-slate-100">
-              {customers.map(c => (
+              {unpaidCustomers.map(c => (
                 <div key={c.id} onClick={() => selectCustomer(c)}
                   className={`flex items-center justify-between px-5 py-4 cursor-pointer transition-colors ${selectedCustomer?.id === c.id ? 'bg-primary-50' : 'hover:bg-slate-50 bg-white'}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-sm shadow-sm">
-                      {c.name[0].toUpperCase()}
+                      {(c.name || 'C')[0].toUpperCase()}
                     </div>
                     <div>
                       <p className="text-sm font-bold text-slate-900">{c.name}</p>
@@ -272,13 +490,16 @@ function CreditTab() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-black ${c.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{c.balance}</p>
-                    <span className={c.balance > 0 ? 'badge-danger text-[10px]' : 'badge-success text-[10px]'}>
-                      {c.balance > 0 ? 'Outstanding' : 'Has Cleared'}
+                    <p className="text-sm font-black text-red-600">₹{c.balance}</p>
+                    <span className="badge-danger text-[10px]">
+                      Outstanding
                     </span>
                   </div>
                 </div>
               ))}
+              {unpaidCustomers.length === 0 && (
+                <div className="text-center text-slate-500 py-8 text-sm font-medium">No customers with outstanding dues.</div>
+              )}
             </div>
           )}
         </div>
