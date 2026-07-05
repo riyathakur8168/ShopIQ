@@ -32,6 +32,7 @@ export const verifyOtp = (type, value, otp) => API.post('/auth/verify-otp', { ty
 export const sendForgotPasswordOtp = (type, value) => API.post('/auth/forgot-password/send-otp', { type, value });
 export const verifyForgotPasswordOtp = (type, value, otp) => API.post('/auth/forgot-password/verify-otp', { type, value, otp });
 export const resetForgotPassword = (type, value, otp, password) => API.post('/auth/forgot-password/reset', { type, value, otp, password });
+export const getPublicMetrics = () => API.get('/public/metrics');
 
 // Products
 export const getProducts = (params) => API.get('/products/', { params });

@@ -93,6 +93,309 @@ function validateForgotNewPassword(v) {
   return '';
 }
 
+function AnimatedCounter({ value, duration = 800 }) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    let start = displayValue;
+    const end = parseInt(value, 10) || 0;
+    if (start === end) return;
+
+    const range = end - start;
+    const totalTicks = 20;
+    const tickDuration = duration / totalTicks;
+    let tick = 0;
+
+    const timer = setInterval(() => {
+      tick++;
+      const progress = tick / totalTicks;
+      const easedProgress = progress * (2 - progress);
+      const val = Math.floor(start + range * easedProgress);
+      setDisplayValue(val);
+
+      if (tick >= totalTicks) {
+        setDisplayValue(end);
+        clearInterval(timer);
+      }
+    }, tickDuration);
+
+    return () => clearInterval(timer);
+  }, [value]);
+
+}
+
+function LiveShowcase({ metrics }) {
+  const [activeLog, setActiveLog] = useState([
+    { id: 1, text: "New Invoice Generated: ₹1,250", type: "invoice" },
+    { id: 2, text: "Stock Alert: Beverages (Low) ⚠️", type: "stock" },
+    { id: 3, text: "Payment Received: Amit Patel (₹850)", type: "payment" }
+  ]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [hoveredCard, setHoveredCard] = useState(null);
+
+  // Live log rotation
+  useEffect(() => {
+    const logs = [
+      { text: "New Invoice Generated: ₹1,250", type: "invoice" },
+      { text: "Stock Alert: Beverages (Low Stock) ⚠️", type: "stock" },
+      { text: "Payment Received: Amit Patel (₹850)", type: "payment" },
+      { text: "Customer Rahul Verma cleared ₹500 dues.", type: "payment" },
+      { text: "Stock Alert: Tomato Ketchup (Critical) 🔴", type: "stock" },
+      { text: "Inventory Restocked: Beverages (+100 items)", type: "invoice" }
+    ];
+    let idx = 0;
+    const interval = setInterval(() => {
+      idx = (idx + 1) % logs.length;
+      setActiveLog(prev => {
+        const next = [...prev.slice(1), { id: Date.now(), ...logs[idx] }];
+        return next;
+      });
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Search input typing simulation
+  useEffect(() => {
+    const phrases = ["Rahul Verma", "Beverages", "Priya Singh", "Tomato Ketchup"];
+    let phraseIdx = 0;
+    let charIdx = 0;
+    let isDeleting = false;
+    let timer;
+
+    const tick = () => {
+      const fullPhrase = phrases[phraseIdx];
+      if (!isDeleting) {
+        setSearchQuery("Searching: " + fullPhrase.slice(0, charIdx + 1));
+        charIdx++;
+        if (charIdx === fullPhrase.length) {
+          isDeleting = true;
+          timer = setTimeout(tick, 2000);
+        } else {
+          timer = setTimeout(tick, 100);
+        }
+      } else {
+        setSearchQuery("Searching: " + fullPhrase.slice(0, charIdx - 1));
+        charIdx--;
+        if (charIdx === 0) {
+          isDeleting = false;
+          phraseIdx = (phraseIdx + 1) % phrases.length;
+          timer = setTimeout(tick, 500);
+        } else {
+          timer = setTimeout(tick, 50);
+        }
+      }
+    };
+
+    timer = setTimeout(tick, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="flex gap-3 items-stretch select-none mt-2 w-full">
+      {/* Glassmorphic Dashboard Showcase */}
+      <div className="flex-1 bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-3xl p-3.5 shadow-2xl relative overflow-hidden flex flex-col gap-2.5 text-left">
+        
+        {/* Top Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-xs font-black text-slate-900 tracking-tight">Dashboard: Live Activity</h3>
+            <span className="text-[8px] font-black uppercase bg-slate-100 text-slate-500 px-1 py-0.5 rounded tracking-wider border border-slate-200/50">Simulated</span>
+          </div>
+          <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1 py-0.5 rounded-full">Today</span>
+        </div>
+
+        {/* Inner Grid */}
+        <div className="grid grid-cols-3 gap-2 flex-1">
+          {/* Card 1: Smart Billing */}
+          <div 
+            onMouseEnter={() => setHoveredCard('billing')}
+            onMouseLeave={() => setHoveredCard(null)}
+            className="bg-slate-50/60 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between relative group hover:shadow hover:bg-white hover:border-slate-200/60 transition-all duration-300"
+          >
+            <div className="space-y-1">
+              <h4 className="text-[8.5px] font-extrabold text-slate-800 tracking-wide uppercase">Billing Counter</h4>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={searchQuery}
+                  className="w-full bg-white border border-slate-200 text-[8.5px] font-bold text-slate-700 px-1.5 py-0.5 rounded-md focus:outline-none pointer-events-none"
+                />
+                <span className="absolute right-1.5 top-1 text-[8px] opacity-40">🔍</span>
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between text-[8px] font-semibold text-slate-600 bg-white border border-slate-100 px-1.5 py-0.5 rounded">
+                  <span>Prod A - ₹500</span>
+                  <span className="text-emerald-600 font-bold">+500</span>
+                </div>
+                <div className="flex items-center justify-between text-[8px] font-semibold text-slate-600 bg-white border border-slate-100 px-1.5 py-0.5 rounded">
+                  <span>Prod B - ₹750</span>
+                  <span className="text-red-500 font-bold">-750</span>
+                </div>
+              </div>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 mt-1.5">
+              <div className="flex justify-between text-[8.5px] font-black text-slate-900">
+                <span>Total Due</span>
+                <span>₹45,200</span>
+              </div>
+              <button type="button" className="w-full bg-primary-600 hover:bg-primary-700 text-white text-[8px] font-bold py-1 rounded transition-colors pointer-events-none mt-1">
+                Generate Invoice
+              </button>
+            </div>
+
+            {/* Hover Tooltip */}
+            {hoveredCard === 'billing' && (
+              <div className="absolute z-10 bottom-full left-0 mb-2 w-44 bg-slate-800 text-white text-[9px] font-semibold p-2 rounded-xl shadow-lg border border-slate-700/50 leading-relaxed animate-fade-in">
+                Process sales faster with our accelerated checkout system.
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Inventory Status */}
+          <div 
+            onMouseEnter={() => setHoveredCard('inventory')}
+            onMouseLeave={() => setHoveredCard(null)}
+            className="bg-slate-50/60 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between relative group hover:shadow hover:bg-white hover:border-slate-200/60 transition-all duration-300"
+          >
+            <div className="space-y-1.5">
+              <h4 className="text-[8.5px] font-extrabold text-slate-800 tracking-wide uppercase">Inventory Tracker</h4>
+              <div className="space-y-1">
+                <div>
+                  <div className="flex justify-between text-[7.5px] font-bold text-slate-600">
+                    <span>Beverages</span>
+                    <span className="text-emerald-600">85%</span>
+                  </div>
+                  <div className="h-1 w-full bg-slate-200/60 rounded-full overflow-hidden mt-0.5">
+                    <div className="h-full bg-emerald-500 rounded-full w-[85%]" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[7.5px] font-bold text-slate-600">
+                    <span>Groceries</span>
+                    <span className="text-amber-500">28% ⚠️</span>
+                  </div>
+                  <div className="h-1 w-full bg-slate-200/60 rounded-full overflow-hidden mt-0.5">
+                    <div className="h-full bg-amber-500 rounded-full w-[28%]" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[7.5px] font-bold text-slate-600">
+                    <span>Snacks</span>
+                    <span className="text-red-500">8% 🔴</span>
+                  </div>
+                  <div className="h-1 w-full bg-slate-200/60 rounded-full overflow-hidden mt-0.5">
+                    <div className="h-full bg-red-500 rounded-full w-[8%]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 mt-1.5 flex items-center justify-between">
+              <span className="text-[7.5px] font-bold text-slate-400">Low Stock Alerts</span>
+              <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-100 px-1 py-0.2 rounded">3</span>
+            </div>
+
+            {/* Hover Tooltip */}
+            {hoveredCard === 'inventory' && (
+              <div className="absolute z-10 bottom-full left-0 mb-2 w-44 bg-slate-800 text-white text-[9px] font-semibold p-2 rounded-xl shadow-lg border border-slate-700/50 leading-relaxed animate-fade-in">
+                Real-time stock alerts and progress bar tracking.
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Khata / Ledger */}
+          <div 
+            onMouseEnter={() => setHoveredCard('ledger')}
+            onMouseLeave={() => setHoveredCard(null)}
+            className="bg-slate-50/60 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between relative group hover:shadow hover:bg-white hover:border-slate-200/60 transition-all duration-300"
+          >
+            <div className="space-y-1.5">
+              <h4 className="text-[8.5px] font-extrabold text-slate-800 tracking-wide uppercase">Ledger Preview</h4>
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between text-[7.5px] font-bold text-slate-600 bg-white border border-slate-100 p-1 rounded-md shadow-sm">
+                  <span>Rahul Sharma</span>
+                  <span className="text-[7px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded">Cleared</span>
+                </div>
+                <div className="flex items-center justify-between text-[7.5px] font-bold text-slate-600 bg-white border border-slate-100 p-1 rounded-md shadow-sm">
+                  <span>Priya Singh</span>
+                  <span className="text-[7px] font-bold text-amber-700 bg-amber-50 px-1 py-0.2 rounded">₹1,250</span>
+                </div>
+              </div>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 mt-1.5 flex justify-between text-[7.5px] font-bold text-slate-400">
+              <span>Outstanding Dues</span>
+              <span className="text-slate-700 font-extrabold">₹{(metrics.total_bills * 150).toLocaleString()}</span>
+            </div>
+
+            {/* Hover Tooltip */}
+            {hoveredCard === 'ledger' && (
+              <div className="absolute z-10 bottom-full left-0 mb-2 w-44 bg-slate-800 text-white text-[9px] font-semibold p-2 rounded-xl shadow-lg border border-slate-700/50 leading-relaxed animate-fade-in">
+                Automatically track credit, dues, and payments.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom Charts & Activity Log Grid */}
+        <div className="grid grid-cols-3 gap-2 flex-shrink-0">
+          {/* Sales Sparkline bar */}
+          <div className="bg-slate-50/60 border border-slate-100 p-2 rounded-xl flex flex-col justify-between hover:bg-white hover:border-slate-200/60 transition-all duration-300">
+            <h5 className="text-[7.5px] font-extrabold text-slate-500 uppercase tracking-wide">Sales Today: ₹45,210</h5>
+            <div className="h-8 flex items-end gap-1 mt-1 px-1">
+              {[25, 45, 15, 65, 85, 55].map((h, i) => (
+                <div key={i} className="flex-1 bg-primary-100 hover:bg-primary-500 transition-colors rounded-sm relative group" style={{ height: `${h}%` }}>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-slate-800 text-white text-[8px] font-bold px-1 rounded">₹{h * 50}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Growth Curve line chart */}
+          <div className="bg-slate-50/60 border border-slate-100 p-2 rounded-xl flex flex-col justify-between hover:bg-white hover:border-slate-200/60 transition-all duration-300">
+            <h5 className="text-[7.5px] font-extrabold text-slate-500 uppercase tracking-wide">Sales Growth</h5>
+            <div className="h-8 mt-1">
+              <svg className="w-full h-full" viewBox="0 0 100 30" preserveAspectRatio="none">
+                <path d="M 0 25 Q 25 5, 50 15 T 100 8" fill="none" stroke="#2563EB" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M 0 25 Q 25 5, 50 15 T 100 8 L 100 30 L 0 30 Z" fill="rgba(37, 99, 235, 0.08)" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Live Activity Log */}
+          <div className="bg-slate-50/60 border border-slate-100 p-2 rounded-xl overflow-hidden flex flex-col justify-between hover:bg-white hover:border-slate-200/60 transition-all duration-300">
+            <h5 className="text-[7.5px] font-extrabold text-slate-500 uppercase tracking-wide">Live Activity Log</h5>
+            <div className="space-y-0.5 mt-1">
+              {activeLog.slice(0, 2).map(log => (
+                <div key={log.id} className="text-[7px] font-bold text-slate-600 bg-white border border-slate-100 px-1 py-0.2 rounded truncate animate-fade-in flex items-center gap-1">
+                  <span className={`w-1 h-1 rounded-full ${log.type === 'invoice' ? 'bg-emerald-500' : log.type === 'stock' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                  <span>{log.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Floating Glowing Feature Tags */}
+      <div className="w-[105px] flex flex-col gap-1.5 justify-center flex-shrink-0">
+        {[
+          { label: "⚡ FAST BILLING", border: "border-emerald-500", glow: "shadow-[0_0_6px_rgba(16,185,129,0.25)]", bg: "bg-emerald-50 text-emerald-700" },
+          { label: "📦 AUTO-INVENTORY", border: "border-blue-500", glow: "shadow-[0_0_6px_rgba(59,130,246,0.25)]", bg: "bg-blue-50 text-blue-700" },
+          { label: "📊 SMART LEDGER", border: "border-purple-500", glow: "shadow-[0_0_6px_rgba(168,85,247,0.25)]", bg: "bg-purple-50 text-purple-700" },
+          { label: "🔔 LOW-STOCK ALERTS", border: "border-orange-500", glow: "shadow-[0_0_6px_rgba(249,115,22,0.25)]", bg: "bg-orange-50 text-orange-700" },
+          { label: "🔍 ADVANCED SEARCH", border: "border-yellow-500", glow: "shadow-[0_0_6px_rgba(234,179,8,0.25)]", bg: "bg-yellow-50 text-yellow-700" }
+        ].map(tag => (
+          <div key={tag.label} className={`border text-[7.5px] font-black py-1.5 px-1 rounded-lg text-center tracking-wide transition-all duration-300 hover:scale-105 ${tag.border} ${tag.glow} ${tag.bg}`}>
+            {tag.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Reusable field error message ─────────────────────────────────────────────
 
 function FieldError({ msg }) {
@@ -308,6 +611,24 @@ export default function Login() {
   const [emailVerified, setEmailVerified] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
 
+  // Dynamic Dashboard Metrics
+  const [metrics, setMetrics] = useState({ total_customers: 0, total_bills: 0, live_transactions_today: 0 });
+
+  const fetchMetrics = async () => {
+    try {
+      const res = await api.getPublicMetrics();
+      setMetrics(res.data || { total_customers: 0, total_bills: 0, live_transactions_today: 0 });
+    } catch (err) {
+      console.error("Failed to fetch public metrics", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 60000); // 60 seconds polling
+    return () => clearInterval(interval);
+  }, []);
+
   // Forgot Password State
   const [forgotStep, setForgotStep] = useState('select_method'); // 'select_method' | 'input_value' | 'verify_otp' | 'reset_password'
   const [forgotMethod, setForgotMethod] = useState('email'); // 'email' | 'phone'
@@ -482,8 +803,8 @@ export default function Login() {
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-[#F8FAFC] flex flex-col md:flex-row font-sans">
       
-      {/* Left Column: Branding Section (40% width) */}
-      <div className="w-full md:w-[40%] md:h-full bg-slate-50 p-6 lg:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-200/60 flex-shrink-0 md:overflow-y-auto">
+      {/* Left Column: Branding Section (45% width) */}
+      <div className="w-full md:w-[45%] md:h-full bg-slate-50 p-6 lg:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-200/60 flex-shrink-0 md:overflow-y-auto">
         
         {/* Top brand header */}
         <div className="flex items-center gap-2.5">
@@ -518,56 +839,21 @@ export default function Login() {
             ))}
           </div>
 
-          {/* High-Fidelity Dashboard Mockup (Compact version) */}
-          <div className="mt-4 hidden lg:block bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_4px_15px_rgba(0,0,0,0.01)]">
-            {/* Window bar */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-slate-200" />
-                <span className="w-2 h-2 rounded-full bg-slate-200" />
-                <span className="w-2 h-2 rounded-full bg-slate-200" />
-                <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase ml-1">Live Dashboard</span>
-              </div>
-              <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">Today</span>
-            </div>
-            
-            {/* Mini Metrics Cards */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100/80">
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Revenue</p>
-                <p className="text-xs font-extrabold text-slate-800 mt-0.5">₹45,280</p>
-                <span className="text-[8px] font-bold text-emerald-600 flex items-center gap-0.5">↑ 12.4%</span>
-              </div>
-              <div className="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100/80">
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Orders</p>
-                <p className="text-xs font-extrabold text-slate-800 mt-0.5">320</p>
-                <span className="text-[8px] font-bold text-emerald-600 flex items-center gap-0.5">↑ 8.2%</span>
-              </div>
-              <div className="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100/80">
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Low Stock</p>
-                <p className="text-xs font-extrabold text-slate-800 mt-0.5">5 items</p>
-                <span className="text-[8px] font-bold text-amber-600 flex items-center gap-0.5">⚠ Review</span>
-              </div>
-            </div>
-            
-            {/* Sales Chart Mockup */}
-            <div>
-              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Hourly Sales</p>
-              <div className="h-16 bg-slate-50/50 border border-slate-100 rounded-xl relative p-1 flex items-end">
-                <svg className="w-full h-full" viewBox="0 0 300 80">
-                  <defs>
-                    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor="#2563EB" stopOpacity="0.15" />
-                      <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0"  />
-                    </linearGradient>
-                  </defs>
-                  <line x1="0" y1="20" x2="300" y2="20" stroke="#f1f5f9" strokeWidth="1" />
-                  <line x1="0" y1="40" x2="300" y2="40" stroke="#f1f5f9" strokeWidth="1" />
-                  <line x1="0" y1="60" x2="300" y2="60" stroke="#f1f5f9" strokeWidth="1" />
-                  <path d="M 0 70 Q 50 40 100 50 T 200 20 T 300 30 L 300 80 L 0 80 Z" fill="url(#chartGrad)" />
-                  <path d="M 0 70 Q 50 40 100 50 T 200 20 T 300 30" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" />
-                  <circle cx="200" cy="20" r="3.5" fill="#2563EB" />
-         <div className="w-full max-w-[420px] bg-white border border-slate-200/80 rounded-3xl p-6 lg:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.015)]">
+          {/* High-Fidelity Dashboard Mockup (Live Showcase) */}
+          <div className="mt-4 hidden lg:block">
+            <LiveShowcase metrics={metrics} />
+          </div>
+        </div>
+
+        {/* Bottom copyright/footer info */}
+        <div className="text-[10px] font-semibold text-slate-400">
+          © {new Date().getFullYear()} ShopIQ Inc. All rights reserved.
+        </div>
+      </div>
+
+      {/* Right Column: Authentication Form (55% width) */}
+      <div className="w-full md:w-[55%] md:h-full bg-[#F8FAFC] flex items-center justify-center p-6 md:p-10 md:overflow-y-auto">
+        <div className="w-full max-w-[420px] bg-white border border-slate-200/80 rounded-3xl p-6 lg:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.015)]">
           {mode === 'forgot_password' ? (
             <div>
               {/* Form Header */}
@@ -791,7 +1077,7 @@ export default function Login() {
                         const val = e.target.value;
                         setForgotConfirmPassword(val);
                         setForgotTouched(prev => ({ ...prev, confirmPassword: true }));
-                        setForgotErrors(prev => ({ ...prev, confirmPassword: validateForgotConfirmPassword(forgotPassword, val) }));
+                        setForgotErrors(prev => ({ ...prev, confirmPassword: validateConfirmPassword(forgotPassword, val) }));
                       }}
                     />
                     {forgotTouched.confirmPassword && forgotErrors.confirmPassword && (
@@ -803,7 +1089,7 @@ export default function Login() {
                     type="button"
                     onClick={async () => {
                       const passErr = validateForgotNewPassword(forgotPassword);
-                      const confErr = validateForgotConfirmPassword(forgotPassword, forgotConfirmPassword);
+                      const confErr = validateConfirmPassword(forgotPassword, forgotConfirmPassword);
                       if (passErr || confErr) {
                         setForgotErrors({ password: passErr, confirmPassword: confErr });
                         setForgotTouched({ password: true, confirmPassword: true });

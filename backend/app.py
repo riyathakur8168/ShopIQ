@@ -29,6 +29,47 @@ def create_app(config_class=Config):
     def index():
         return {'status': 'ok'}, 200
 
+    import time
+    import threading
+    from datetime import date
+    _METRICS_CACHE = {}
+    _METRICS_CACHE_LOCK = threading.Lock()
+    CACHE_TTL_SECONDS = 120
+
+    @app.route('/api/public/metrics')
+    def public_metrics():
+        from flask import jsonify
+        from models import Customer, Invoice, Sale, CreditRecord
+        now = time.time()
+        with _METRICS_CACHE_LOCK:
+            if 'data' in _METRICS_CACHE and now < _METRICS_CACHE['expires_at']:
+                return jsonify(_METRICS_CACHE['data']), 200
+
+            try:
+                total_customers = Customer.query.count()
+                total_bills = Invoice.query.count()
+
+                today = date.today()
+                sales_today = Sale.query.filter_by(sale_date=today).count()
+                credits_today = CreditRecord.query.filter_by(date=today).count()
+                live_transactions_today = sales_today + credits_today
+
+                data = {
+                    'total_customers': total_customers,
+                    'total_bills': total_bills,
+                    'live_transactions_today': live_transactions_today
+                }
+
+                _METRICS_CACHE['data'] = data
+                _METRICS_CACHE['expires_at'] = now + CACHE_TTL_SECONDS
+                return jsonify(data), 200
+            except Exception as e:
+                return jsonify({
+                    'total_customers': 0,
+                    'total_bills': 0,
+                    'live_transactions_today': 0
+                }), 200
+
     with app.app_context():
         db.create_all()
 
