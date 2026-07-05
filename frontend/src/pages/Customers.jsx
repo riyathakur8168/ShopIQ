@@ -310,51 +310,33 @@ function CreditTab() {
                 <div><p className="text-xs text-slate-400 font-semibold mb-1">Outstanding</p><p className={`text-lg font-black ${selectedCustomer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{selectedCustomer.balance.toLocaleString()}</p></div>
               </div>
 
-              <div className="px-5 py-5 border-b border-slate-200 bg-slate-50 flex-shrink-0">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">ADD CREDIT (UDHAR)</p>
-                    <form onSubmit={async (e) => {
-                      e.preventDefault();
-                      try {
-                        const formattedForm = { ...creditForm };
-                        if (formattedForm.products_purchased && !formattedForm.products_purchased.startsWith('[')) {
-                          const qty = Number(formattedForm.quantity) || 1;
-                          const amt = Number(formattedForm.amount);
-                          formattedForm.products_purchased = JSON.stringify([{
-                            name: formattedForm.products_purchased,
-                            quantity: qty,
-                            unit_price: amt / qty,
-                            total: amt
-                          }]);
-                        }
-                        const res = await addCredit(selectedCustomer.id, formattedForm);
-                        toast('Credit added!', 'success');
-                        setSelectedCustomer(res.data.customer);
-                        setCreditForm({ amount: '', note: '', products_purchased: '', quantity: '', bill_amount: '', date: new Date().toISOString().split('T')[0] });
-                        loadHistory(selectedCustomer.id); load();
-                      } catch (err) { toast(err.response?.data?.message || 'Failed', 'error'); }
-                    }} className="flex flex-col gap-2">
-                      <div className="flex gap-2">
-                        <input className="input flex-[2] py-2 text-sm border-slate-300 bg-white" placeholder="Products (e.g. Milk)" required value={creditForm.products_purchased} onChange={e => setCreditForm(f => ({ ...f, products_purchased: e.target.value }))} />
-                        <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" placeholder="Qty" value={creditForm.quantity} onChange={e => setCreditForm(f => ({ ...f, quantity: e.target.value }))} />
-                      </div>
-                      <div className="flex gap-2">
-                        <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" placeholder="Bill ₹" value={creditForm.bill_amount} onChange={e => setCreditForm(f => ({ ...f, bill_amount: e.target.value }))} />
-                        <input className="input flex-1 py-2 text-sm border-slate-300 bg-white border-red-300" type="number" step="0.01" required value={creditForm.amount} placeholder="Credit ₹" onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} />
-                        <button type="submit" className="btn bg-red-600 text-white hover:bg-red-700 text-sm font-bold shadow-sm px-3">Add</button>
-                      </div>
-                    </form>
+              <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Record Installment / Payment Payout</p>
+                <form onSubmit={handlePayment} className="flex gap-3 items-center">
+                  <div className="flex-1">
+                    <input 
+                      className="input w-full py-2 text-sm border-slate-300 bg-white font-semibold text-slate-800" 
+                      type="number" 
+                      step="0.01" 
+                      required 
+                      value={paymentForm.amount} 
+                      placeholder="Enter Installment Amount (₹)" 
+                      onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} 
+                    />
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-2 font-bold tracking-wide">RECORD PAYMENT</p>
-                    <form onSubmit={handlePayment} className="flex gap-2">
-                      <input className="input flex-1 py-2 text-sm border-slate-300 bg-white" type="number" step="0.01" required value={paymentForm.amount} placeholder="₹ Amount"
-                        onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} />
-                      <button type="submit" className="btn bg-green-600 text-white hover:bg-green-700 text-sm font-bold shadow-sm">Pay</button>
-                    </form>
+                  <div className="flex-[1.5]">
+                    <input 
+                      className="input w-full py-2 text-sm border-slate-300 bg-white text-slate-700 font-semibold" 
+                      type="text" 
+                      value={paymentForm.note} 
+                      placeholder="Payment note (e.g. Cash, GPay, PhonePe)" 
+                      onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))} 
+                    />
                   </div>
-                </div>
+                  <button type="submit" className="btn bg-green-600 hover:bg-green-700 text-white text-sm font-bold shadow-sm px-5 py-2.5 rounded-xl transition-all">
+                    Record Installment
+                  </button>
+                </form>
               </div>
 
               <div className="flex-1 overflow-y-auto bg-white rounded-b-2xl">

@@ -189,7 +189,18 @@ export default function POSCounter({ setActiveTab }) {
         });
       }
 
-      // 3. Process Udhar — send complete cart so ledger stores full product details
+      // 3. Generate Bill/Invoice
+      const invoicePayload = {
+        customer_name: finalCustomer ? finalCustomer.name : 'Walk-in Customer',
+        items: cart.map(item => ({
+          name: item.name,
+          qty: item.cartQty,
+          price: item.sell_price
+        }))
+      };
+      const invRes = await createInvoice(invoicePayload);
+
+      // 4. Process Udhar — send complete cart so ledger stores full product details
       if (paymentMethod === 'Udhar' && finalCustomer) {
         const billNumber = invRes.data?.invoice?.id
           ? String(invRes.data.invoice.id)
@@ -212,17 +223,6 @@ export default function POSCounter({ setActiveTab }) {
           date:               new Date().toISOString().split('T')[0]
         });
       }
-
-      // 4. Generate Bill/Invoice
-      const invoicePayload = {
-        customer_name: finalCustomer ? finalCustomer.name : 'Walk-in Customer',
-        items: cart.map(item => ({
-          name: item.name,
-          qty: item.cartQty,
-          price: item.sell_price
-        }))
-      };
-      const invRes = await createInvoice(invoicePayload);
 
       toast(`Sale recorded & bill generated for ₹${totalAmount.toLocaleString()}!`, 'success');
       
