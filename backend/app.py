@@ -17,6 +17,7 @@ def create_app(config_class=Config):
     from routes.customers import customers_bp
     from routes.invoices import invoices_bp
     from routes.suppliers import suppliers_bp
+    from routes.purchases import purchases_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
@@ -24,6 +25,7 @@ def create_app(config_class=Config):
     app.register_blueprint(customers_bp)
     app.register_blueprint(invoices_bp)
     app.register_blueprint(suppliers_bp)
+    app.register_blueprint(purchases_bp)
 
     @app.route('/')
     def index():
@@ -130,6 +132,11 @@ def create_app(config_class=Config):
             "SELECT user_id FROM products LIMIT 1",
             "ALTER TABLE products ADD COLUMN user_id INTEGER REFERENCES users(id)",
             "added user_id to products"
+        )
+        _add_column_if_missing(
+            "SELECT company_name FROM products LIMIT 1",
+            "ALTER TABLE products ADD COLUMN company_name VARCHAR(150) DEFAULT ''",
+            "added company_name to products"
         )
         _add_column_if_missing(
             "SELECT user_id FROM sales LIMIT 1",

@@ -83,7 +83,8 @@ export const deleteSupplier = (id) => API.delete(`/suppliers/${id}`);
 export const getSupplier = (id) => API.get(`/suppliers/${id}`);
 export const addSupplierPurchase = (id, data) => API.post(`/suppliers/${id}/purchase`, data);
 export const recordSupplierPayment = (id, data) => API.post(`/suppliers/${id}/payment`, data);
-
+export const quickSupplier = (data) => API.post('/v1/purchases/quick-supplier', data);
+export const quickProduct = (data) => API.post('/v1/purchases/quick-product', data);
 
 // Invoices
 export const getInvoices = () => API.get('/invoices/');

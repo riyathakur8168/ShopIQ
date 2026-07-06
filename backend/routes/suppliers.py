@@ -11,6 +11,40 @@ suppliers_bp = Blueprint('suppliers', __name__, url_prefix='/api/suppliers')
 def _uid():
     return int(get_jwt_identity())
 
+import re
+
+def validate_supplier_data(data):
+    name = data.get('name', '').strip()
+    business_name = data.get('business_name', '').strip()
+    phone = data.get('phone', '').strip()
+    email = data.get('email', '').strip()
+
+    if not name:
+        return 'Supplier Name is required.'
+    if len(name) < 2 or len(name) > 50:
+        return 'Supplier Name must be between 2 and 50 characters.'
+    if not re.match(r'^[a-zA-Z\s]+$', name):
+        return 'Supplier Name can only contain letters and spaces.'
+    if name.isspace() or not name.replace(' ', ''):
+        return 'Supplier Name cannot contain only spaces.'
+
+    if not business_name:
+        return 'Business Name is required.'
+    if len(business_name) < 2 or len(business_name) > 100:
+        return 'Business Name must be between 2 and 100 characters.'
+
+    if not phone:
+        return 'Phone Number is required.'
+    if not re.match(r'^[6-9]\d{9}$', phone):
+        return 'Please enter a valid 10-digit Indian mobile number.'
+
+    if not email:
+        return 'Email Address is required.'
+    if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email):
+        return 'Please enter a valid email address.'
+
+    return None
+
 
 @suppliers_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -53,9 +87,10 @@ def get_suppliers():
 @jwt_required()
 def add_supplier():
     uid = _uid()
-    data = request.get_json()
-    if not data or not data.get('name') or not data.get('business_name'):
-        return jsonify({'message': 'Supplier Name and Business Name are required'}), 400
+    data = request.get_json() or {}
+    val_err = validate_supplier_data(data)
+    if val_err:
+        return jsonify({'message': val_err}), 400
 
     supplier = Supplier(
         name=data['name'].strip(),
@@ -110,7 +145,18 @@ def get_supplier(supplier_id):
 def update_supplier(supplier_id):
     uid = _uid()
     supplier = Supplier.query.filter_by(id=supplier_id, user_id=uid).first_or_404()
-    data = request.get_json()
+    data = request.get_json() or {}
+
+    merged_data = {
+        'name': data.get('name', supplier.name),
+        'business_name': data.get('business_name', supplier.business_name),
+        'phone': data.get('phone', supplier.phone),
+        'email': data.get('email', supplier.email)
+    }
+
+    val_err = validate_supplier_data(merged_data)
+    if val_err:
+        return jsonify({'message': val_err}), 400
 
     supplier.name = data.get('name', supplier.name).strip()
     supplier.business_name = data.get('business_name', supplier.business_name).strip()

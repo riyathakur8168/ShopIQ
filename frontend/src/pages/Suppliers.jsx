@@ -7,7 +7,9 @@ import {
   getSupplier, 
   addSupplierPurchase, 
   recordSupplierPayment, 
-  getProducts 
+  getProducts,
+  quickSupplier,
+  quickProduct
 } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
@@ -102,12 +104,31 @@ function DirectoryTab() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const name = form.name ? form.name.trim() : '';
+    const businessName = form.business_name ? form.business_name.trim() : '';
+    const phone = form.phone ? form.phone.trim() : '';
+    const email = form.email ? form.email.trim() : '';
+
+    if (!name) return toast('Supplier Name is required.', 'warning');
+    if (name.length < 2 || name.length > 50) return toast('Supplier Name must be between 2 and 50 characters.', 'warning');
+    if (!/^[a-zA-Z\s]+$/.test(name)) return toast('Supplier Name can only contain letters and spaces.', 'warning');
+    if (name.replace(/\s/g, '').length === 0) return toast('Supplier Name cannot contain only spaces.', 'warning');
+
+    if (!businessName) return toast('Business Name is required.', 'warning');
+    if (businessName.length < 2 || businessName.length > 100) return toast('Business Name must be between 2 and 100 characters.', 'warning');
+
+    if (!phone) return toast('Phone Number is required.', 'warning');
+    if (!/^[6-9]\d{9}$/.test(phone)) return toast('Please enter a valid 10-digit Indian mobile number.', 'warning');
+
+    if (!email) return toast('Email Address is required.', 'warning');
+    if (!/^[\w\.-]+@[\w\.-]+\.\w+$/.test(email)) return toast('Please enter a valid email address.', 'warning');
+
     try {
       if (isEditing) {
-        await updateSupplier(form.id, form);
+        await updateSupplier(form.id, { ...form, name, business_name: businessName, phone, email });
         toast('Supplier updated successfully!', 'success');
       } else {
-        await addSupplier(form);
+        await addSupplier({ ...form, name, business_name: businessName, phone, email });
         toast('Supplier added successfully!', 'success');
       }
       setShowAddForm(false);
@@ -207,8 +228,8 @@ function DirectoryTab() {
                 <input required className="input bg-white border-slate-200" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9876543210" />
               </div>
               <div>
-                <label className="input-label">Email Address</label>
-                <input type="email" className="input bg-white border-slate-200" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="vendor@email.com" />
+                <label className="input-label">Email Address *</label>
+                <input type="email" required className="input bg-white border-slate-200" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="vendor@email.com" />
               </div>
               <div>
                 <label className="input-label">GST Number</label>
@@ -495,7 +516,100 @@ function PurchaseHistoryTab() {
   const [currentQty, setCurrentQty] = useState('');
   const [currentCost, setCurrentCost] = useState('');
 
+  // Quick Supplier Form States
+  const [showQuickSupplierModal, setShowQuickSupplierModal] = useState(false);
+  const [quickSupForm, setQuickSupForm] = useState({ name: '', business_name: '', phone: '', email: '' });
+  const [quickSupLoading, setQuickSupLoading] = useState(false);
+
+  // Quick Product Form States
+  const [showQuickProductModal, setShowQuickProductModal] = useState(false);
+  const [quickProdForm, setQuickProdForm] = useState({ name: '', company_name: '', category: 'General' });
+  const [quickProdLoading, setQuickProdLoading] = useState(false);
+
   const { toast } = useToast();
+
+  const handleQuickSupplierSubmit = async (e) => {
+    e.preventDefault();
+    const name = quickSupForm.name ? quickSupForm.name.trim() : '';
+    const businessName = quickSupForm.business_name ? quickSupForm.business_name.trim() : '';
+    const phone = quickSupForm.phone ? quickSupForm.phone.trim() : '';
+    const email = quickSupForm.email ? quickSupForm.email.trim() : '';
+
+    if (!name) return toast('Supplier Name is required.', 'warning');
+    if (name.length < 2 || name.length > 50) return toast('Supplier Name must be between 2 and 50 characters.', 'warning');
+    if (!/^[a-zA-Z\s]+$/.test(name)) return toast('Supplier Name can only contain letters and spaces.', 'warning');
+    if (name.replace(/\s/g, '').length === 0) return toast('Supplier Name cannot contain only spaces.', 'warning');
+
+    if (!businessName) return toast('Business Name is required.', 'warning');
+    if (businessName.length < 2 || businessName.length > 100) return toast('Business Name must be between 2 and 100 characters.', 'warning');
+
+    if (!phone) return toast('Phone Number is required.', 'warning');
+    if (!/^[6-9]\d{9}$/.test(phone)) return toast('Please enter a valid 10-digit Indian mobile number.', 'warning');
+
+    if (!email) return toast('Email Address is required.', 'warning');
+    if (!/^[\w\.-]+@[\w\.-]+\.\w+$/.test(email)) return toast('Please enter a valid email address.', 'warning');
+
+    setQuickSupLoading(true);
+    try {
+      const res = await quickSupplier({
+        name,
+        business_name: businessName,
+        phone,
+        email
+      });
+      
+      toast('Supplier created successfully!', 'success');
+      
+      // Reload suppliers list
+      const supRes = await getSuppliers();
+      setSuppliers(supRes.data);
+      
+      // Automatically select the new supplier
+      setSelectedSupplierId(res.data.id);
+      
+      // Close modal and reset form
+      setShowQuickSupplierModal(false);
+      setQuickSupForm({ name: '', business_name: '', phone: '', email: '' });
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to create supplier', 'error');
+    } finally {
+      setQuickSupLoading(false);
+    }
+  };
+
+  const handleQuickProductSubmit = async (e) => {
+    e.preventDefault();
+    if (!quickProdForm.name.trim()) return toast('Product Name is required.', 'warning');
+    if (!quickProdForm.company_name.trim()) return toast('Company / Brand Name is required.', 'warning');
+    
+    setQuickProdLoading(true);
+    try {
+      const res = await quickProduct({
+        name: quickProdForm.name.trim(),
+        company_name: quickProdForm.company_name.trim(),
+        category: quickProdForm.category.trim() || 'General'
+      });
+      
+      toast('Product created successfully!', 'success');
+      
+      // Reload products list
+      const prodRes = await getProducts({ per_page: 1000 });
+      const updatedProducts = prodRes.data.items || prodRes.data || [];
+      setProducts(updatedProducts);
+      
+      // Automatically select the new product
+      setCurrentProductId(res.data.id);
+      setCurrentCost(0); // newly created product has default price of 0
+      
+      // Close modal and reset form
+      setShowQuickProductModal(false);
+      setQuickProdForm({ name: '', company_name: '', category: 'General' });
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to create product', 'error');
+    } finally {
+      setQuickProdLoading(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -631,7 +745,16 @@ function PurchaseHistoryTab() {
           <form onSubmit={handleSavePurchase} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="input-label">Supplier *</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="input-label mb-0">Supplier *</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowQuickSupplierModal(true)} 
+                    className="text-[11px] font-bold text-primary-600 hover:text-primary-700 transition-colors"
+                  >
+                    + Add New Supplier
+                  </button>
+                </div>
                 <select 
                   required
                   className="input bg-white border-slate-200 font-semibold"
@@ -683,11 +806,25 @@ function PurchaseHistoryTab() {
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                 <div className="md:col-span-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Product *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-0 block">Product *</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowQuickProductModal(true)} 
+                      className="text-[10px] font-bold text-primary-600 hover:text-primary-700 transition-colors"
+                    >
+                      + Create New Product
+                    </button>
+                  </div>
                   <select 
                     className="input bg-slate-50 border-slate-200 text-sm font-semibold"
                     value={currentProductId}
                     onChange={e => {
+                      if (e.target.value === 'NEW_PRODUCT') {
+                        setShowQuickProductModal(true);
+                        setCurrentProductId('');
+                        return;
+                      }
                       setCurrentProductId(e.target.value);
                       const prod = products.find(p => p.id === Number(e.target.value));
                       if (prod) {
@@ -696,8 +833,9 @@ function PurchaseHistoryTab() {
                     }}
                   >
                     <option value="">Select product from inventory...</option>
+                    <option value="NEW_PRODUCT" className="text-primary-600 font-bold">+ Create New Product / Add Item</option>
                     {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} (Current Stock: {p.stock_quantity})</option>
+                      <option key={p.id} value={p.id}>{p.name} {p.company_name ? `(${p.company_name})` : ''} (Stock: {p.stock_quantity})</option>
                     ))}
                   </select>
                 </div>
@@ -845,6 +983,163 @@ function PurchaseHistoryTab() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Quick Add Supplier Modal */}
+      {showQuickSupplierModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 animate-fade-in">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-black text-slate-900">Add New Supplier Quick-Form</h3>
+              <button 
+                type="button" 
+                onClick={() => setShowQuickSupplierModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleQuickSupplierSubmit} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Supplier Name *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh Kumar"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickSupForm.name}
+                  onChange={e => setQuickSupForm({...quickSupForm, name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Business Name *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh Wholesale Store"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickSupForm.business_name}
+                  onChange={e => setQuickSupForm({...quickSupForm, business_name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Number *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. 9876543210"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickSupForm.phone}
+                  onChange={e => setQuickSupForm({...quickSupForm, phone: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Email Address *</label>
+                <input 
+                  type="email"
+                  required
+                  placeholder="e.g. ramesh@wholesale.com"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickSupForm.email}
+                  onChange={e => setQuickSupForm({...quickSupForm, email: e.target.value})}
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowQuickSupplierModal(false)}
+                  className="btn bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={quickSupLoading}
+                  className="btn bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl text-sm shadow disabled:opacity-60"
+                >
+                  {quickSupLoading ? 'Saving...' : 'Save Supplier'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Product Modal */}
+      {showQuickProductModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 animate-fade-in">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-black text-slate-900">Add New Product Quick-Form</h3>
+              <button 
+                type="button" 
+                onClick={() => setShowQuickProductModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleQuickProductSubmit} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Product Name *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Tomato Ketchup 1kg"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickProdForm.name}
+                  onChange={e => setQuickProdForm({...quickProdForm, name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Company / Brand Name *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Kissan"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickProdForm.company_name}
+                  onChange={e => setQuickProdForm({...quickProdForm, company_name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Category (Optional)</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Beverages"
+                  className="input bg-slate-50 border-slate-200"
+                  value={quickProdForm.category}
+                  onChange={e => setQuickProdForm({...quickProdForm, category: e.target.value})}
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowQuickProductModal(false)}
+                  className="btn bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={quickProdLoading}
+                  className="btn bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl text-sm shadow disabled:opacity-60"
+                >
+                  {quickProdLoading ? 'Saving...' : 'Create Product'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

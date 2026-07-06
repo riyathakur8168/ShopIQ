@@ -72,10 +72,11 @@ class Product(db.Model):
     low_stock_threshold = db.Column(db.Integer, default=10)
     # user_id: data isolation — each product belongs to one user/store
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    company_name = db.Column(db.String(150), default='')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship('Sale', backref='product', lazy=True, cascade="all, delete-orphan")
 
-    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10, category_id=None, user_id=None):
+    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10, category_id=None, user_id=None, company_name=''):
         self.name = name
         self.category = category
         self.buy_price = buy_price
@@ -84,6 +85,7 @@ class Product(db.Model):
         self.low_stock_threshold = low_stock_threshold
         self.category_id = category_id
         self.user_id = user_id
+        self.company_name = company_name
 
     def to_dict(self):
         return {
@@ -96,7 +98,8 @@ class Product(db.Model):
             'stock_quantity': self.stock_quantity,
             'low_stock_threshold': self.low_stock_threshold,
             'is_low_stock': self.stock_quantity <= self.low_stock_threshold,
-            'profit_margin': round(((self.sell_price - self.buy_price) / self.buy_price * 100), 1) if self.buy_price > 0 else 0
+            'profit_margin': round(((self.sell_price - self.buy_price) / self.buy_price * 100), 1) if self.buy_price > 0 else 0,
+            'company_name': self.company_name or ''
         }
 
 
