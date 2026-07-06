@@ -11,3 +11,5 @@ tok = res.json().get('access_token')
 res2 = requests.post('http://127.0.0.1:5000/api/sales/', json={'product_id': 1, 'quantity': 1, 'unit_price': 100, 'note': ''}, headers={'Authorization': 'Bearer ' + str(tok)})
 print("STATUS:", res2.status_code)
 print("BODY:", res2.text)
+
+
