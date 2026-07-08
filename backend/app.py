@@ -12,6 +12,8 @@ def create_app(config_class=Config):
     cors.init_app(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})
 
     from routes.auth import auth_bp
+
+
     from routes.products import products_bp
     from routes.sales import sales_bp
     from routes.customers import customers_bp
