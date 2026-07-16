@@ -1,3 +1,3 @@
-# Moved to tests/test_sale.py
+#moved to tests/test_sale.py
 
 
