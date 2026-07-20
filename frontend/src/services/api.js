@@ -97,4 +97,5 @@ export const quickProduct = (data) => API.post('/v1/purchases/quick-product', da
 export const getInvoices = () => API.get('/invoices/');
 export const createInvoice = (data) => API.post('/invoices/', data);
 
+
 export default API;
