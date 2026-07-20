@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { getSalesAnalytics, getProducts, getCustomers } from '../services/api';
 
 const BOT_AVATAR = <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-violet-600 flex items-center justify-center text-white font-black text-xs flex-shrink-0 shadow-sm">AI</div>;
-
 const SUGGESTIONS = [
   "What's my best-selling product?",
   "Which products need reorder?",
