@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API = axios.create({ baseURL: 'http://127.0.0.1:5000/api' });
+const API = axios.create({ baseURL: 'https://shopiq-iq8c.onrender.com/api' });
 
 // Attach JWT token to every request
 API.interceptors.request.use((config) => {
