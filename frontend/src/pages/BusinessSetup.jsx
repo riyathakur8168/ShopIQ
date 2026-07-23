@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { setupBusiness } from '../services/api';
 
+
 const STORE_TYPES = [
   { id: 'Grocery Store', name: 'Grocery Store', icon: '🛒' },
   { id: 'Department Store', name: 'Department Store', icon: '🏢' },
