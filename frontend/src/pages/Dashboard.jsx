@@ -10,6 +10,7 @@ import AIAssistant from './AIAssistant';
 import { useAuth } from '../context/AuthContext';
 import { getInventoryNotifications } from '../services/api';
 
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('POS Counter');
   const { user } = useAuth();
