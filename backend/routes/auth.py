@@ -6,6 +6,7 @@ from utils.rate_limiter import rate_limit
 import re
 import random
 import time
+from services.email_service import send_email_otp
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -45,23 +46,22 @@ def send_otp():
     if otp_type == 'email':
         if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', value):
             return jsonify({'message': 'Please enter a valid email address.'}), 400
-        otp = _make_otp()
-        _store_otp(f'email:{value.lower()}', otp)
-        # In production: send via SMTP/SendGrid here.
-        # In development: return OTP in response so you can test without email server.
-        print(f'[DEV] Email OTP for {value}: {otp}')
-        return jsonify({'message': f'OTP sent to {value}', 'dev_otp': otp}), 200
 
-    elif otp_type == 'phone':
-        digits = re.sub(r'\D', '', value)
-        if len(digits) != 10:
-            return jsonify({'message': 'Please enter a valid 10-digit mobile number.'}), 400
-        otp = _make_otp()
-        _store_otp(f'phone:{digits}', otp)
-        # In production: send via Twilio/MSG91 here.
-        print(f'[DEV] Phone OTP for {digits}: {otp}')
-        return jsonify({'message': f'OTP sent to {digits}', 'dev_otp': otp}), 200
+    otp = _make_otp()
+    _store_otp(f'email:{value.lower()}', otp)
 
+    try:
+        send_email_otp(value.lower(), otp)
+
+        return jsonify({
+            "message": f"OTP sent successfully to {value}"
+        }), 200
+
+    except Exception as e:
+        print("Email Error:", e)
+        return jsonify({
+            "message": "Failed to send OTP email."
+        }), 500
     return jsonify({'message': 'Invalid OTP type. Must be email or phone.'}), 400
 
 

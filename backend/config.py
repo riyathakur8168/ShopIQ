@@ -1,5 +1,7 @@
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
+load_dotenv()
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -44,3 +46,6 @@ class Config:
 
     # CORS — restrict to your frontend URL in production
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
+    # Resend email configuration
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+    FROM_EMAIL = os.environ.get("FROM_EMAIL")
