@@ -49,3 +49,4 @@ class Config:
     # Resend email configuration
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
     FROM_EMAIL = os.environ.get("FROM_EMAIL")
+    
