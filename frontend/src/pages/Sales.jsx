@@ -41,5 +41,4 @@ export default function Sales({ setActiveTab: setGlobalActiveTab }) {
         {activeTab === 'Reports' && <SalesReports />}
       </div>
     </div>
-  );
-}
+  );}
