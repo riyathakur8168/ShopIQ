@@ -68,7 +68,7 @@ export default function POSCounter({ setActiveTab }) {
     }
   };
 
-  
+
   const validateFirstName = (val) => {
     const trimmed = val.trim();
     if (!trimmed) return "First Name is required.";
