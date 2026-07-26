@@ -318,3 +318,4 @@ def ocr_upload():
         'message': 'Image scanned successfully',
         'extracted_items': mock_items
     }), 200
+    
