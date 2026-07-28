@@ -41,6 +41,7 @@ export default function Suppliers() {
         ))}
       </div>
 
+
       {/* Tab Content */}
       <div className="pt-2">
         {activeTab === 'Directory' && <DirectoryTab />}
