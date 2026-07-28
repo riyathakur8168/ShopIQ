@@ -11,6 +11,7 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+
 function PublicRoute({ children }) {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return children;
