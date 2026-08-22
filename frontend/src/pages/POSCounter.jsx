@@ -21,6 +21,7 @@ export default function POSCounter({ setActiveTab }) {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [mobileView, setMobileView] = useState('catalog'); // 'catalog' | 'cart'
   
   const { toast } = useToast();
 
@@ -358,6 +359,7 @@ export default function POSCounter({ setActiveTab }) {
       setNewCustomer({ name: '', phone: '', address: '' });
       setPaymentMethod('Cash');
       setSearchQuery('');
+      setMobileView('catalog');
       
       // Update inventory states
       window.dispatchEvent(new Event('update-notifications'));
@@ -388,7 +390,7 @@ export default function POSCounter({ setActiveTab }) {
     <div className="h-full flex flex-col md:flex-row bg-slate-50 overflow-hidden relative animate-fade-in">
       
       {/* Left Pane: Product Catalog */}
-      <div className="w-full md:w-[60%] flex flex-col h-full border-r border-slate-200">
+      <div className={`w-full md:w-[60%] flex-col h-full border-r border-slate-200 ${mobileView === 'catalog' ? 'flex' : 'hidden md:flex'}`}>
         <div className="p-4 bg-white border-b border-slate-200 shadow-sm z-10 flex-shrink-0 flex flex-col gap-3">
           
           {/* Category Tabs */}
@@ -524,12 +526,37 @@ export default function POSCounter({ setActiveTab }) {
             </div>
           )}
         </div>
+
+        {/* Floating bottom cart bar for mobile */}
+        {cart.length > 0 && (
+          <div className="md:hidden p-3 bg-white border-t border-slate-200 shadow-lg z-30 flex-shrink-0">
+            <button 
+              onClick={() => setMobileView('cart')}
+              className="w-full bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-between shadow-md transition-all"
+            >
+              <span className="flex items-center gap-2">
+                <span>🛒</span>
+                <span>View Cart ({cart.length} {cart.length === 1 ? 'item' : 'items'})</span>
+              </span>
+              <span className="font-black text-base">₹{totalAmount.toLocaleString()} →</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right Pane: Unified Checkout Workflow */}
-      <div className="w-full md:w-[40%] bg-white flex flex-col h-full shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-20 flex-shrink-0">
+      <div className={`w-full md:w-[40%] bg-white flex-col h-full shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-20 flex-shrink-0 ${mobileView === 'cart' ? 'flex' : 'hidden md:flex'}`}>
         <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center flex-shrink-0">
-          <h2 className="text-lg font-black text-slate-900">Current Sale</h2>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setMobileView('catalog')} 
+              className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-200 transition-colors font-bold text-xs flex items-center gap-1"
+              title="Back to products"
+            >
+              ← Catalog
+            </button>
+            <h2 className="text-lg font-black text-slate-900">Current Sale</h2>
+          </div>
           <span className="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded-md">{cart.length} Items</span>
         </div>
 
@@ -690,13 +717,13 @@ export default function POSCounter({ setActiveTab }) {
       {/* New Customer Modal */}
       {showNewCustomerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-slate-100">
-            <div className="bg-gradient-to-r from-primary-600 to-indigo-600 p-6 text-white">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-scale-up border border-slate-100">
+            <div className="bg-gradient-to-r from-primary-600 to-indigo-600 p-6 text-white flex-shrink-0">
               <h3 className="text-lg font-black">Add New Customer</h3>
               <p className="text-xs text-primary-100 mt-1">Create a customer profile to record sales & credit (Udhar).</p>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">First Name <span className="text-red-500">*</span></label>
                 <input 

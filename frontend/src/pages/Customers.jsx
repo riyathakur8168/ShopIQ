@@ -13,12 +13,12 @@ export default function Customers() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6">
+      <div className="flex border-b border-slate-200 gap-3 sm:gap-6 overflow-x-auto custom-scrollbar">
         {['Directory', 'Credit (Udhar)', 'Billing'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 text-sm font-semibold transition-colors relative ${
+            className={`pb-3 text-sm font-semibold transition-colors relative whitespace-nowrap ${
               activeTab === tab ? 'text-primary-600' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -456,7 +456,7 @@ function CreditTab() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
           { label: 'Outstanding Accounts', value: unpaidCustomers.length, color: 'text-red-600' },
           { label: 'Total Pending Dues',   value: `₹${totalPending.toLocaleString()}`, color: 'text-primary-600' },
@@ -504,28 +504,36 @@ function CreditTab() {
           )}
         </div>
 
-        <div className="card flex flex-col shadow-sm h-[600px]">
+        <div className="card flex flex-col shadow-sm min-h-[500px] lg:h-[600px]">
           {selectedCustomer ? (
             <>
               {/* Customer header: name, phone, status, balance */}
               <div className="section-header bg-slate-50 rounded-t-2xl">
-                <div className="flex items-start justify-between w-full">
+                <div className="flex items-start justify-between w-full gap-2">
                   <div>
-                    <h3 className="section-title text-base">{selectedCustomer.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedCustomer(null)}
+                        className="lg:hidden p-1 text-slate-500 hover:text-slate-900 rounded font-bold text-xs"
+                      >
+                        ← Back
+                      </button>
+                      <h3 className="section-title text-base">{selectedCustomer.name}</h3>
+                    </div>
                     <p className="text-xs text-slate-500 mt-0.5">
                       📞 {selectedCustomer.phone || 'No phone'}
                       {selectedCustomer.address ? ` · ${selectedCustomer.address}` : ''}
                       {selectedCustomer.created_at ? ` · Added on ${selectedCustomer.created_at}` : ''}
                     </p>
                   </div>
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${selectedCustomer.balance > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-lg flex-shrink-0 ${selectedCustomer.balance > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                     {selectedCustomer.balance > 0 ? '⚠ Outstanding' : '✓ Has Cleared'}
                   </span>
                 </div>
               </div>
 
               {/* Balance summary strip */}
-              <div className="px-5 py-4 border-b border-slate-200 flex gap-6 bg-white">
+              <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap gap-4 sm:gap-6 bg-white">
                 <div><p className="text-xs text-slate-400 font-semibold mb-1">Total Credit</p><p className="text-lg font-black text-red-600">₹{selectedCustomer.total_credit.toLocaleString()}</p></div>
                 <div><p className="text-xs text-slate-400 font-semibold mb-1">Total Paid</p><p className="text-lg font-black text-green-600">₹{selectedCustomer.total_paid.toLocaleString()}</p></div>
                 <div><p className="text-xs text-slate-400 font-semibold mb-1">Outstanding</p><p className={`text-lg font-black ${selectedCustomer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{selectedCustomer.balance.toLocaleString()}</p></div>

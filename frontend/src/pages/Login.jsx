@@ -551,13 +551,13 @@ function OtpVerifier({ type, value, isValueValid, onVerified }) {
               placeholder="Enter 6-digit OTP"
               value={otpInput}
               onChange={e => { setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
-              className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] tracking-[0.3em] shadow-inner"
+              className="flex-1 min-w-0 px-2.5 sm:px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] tracking-[0.15em] sm:tracking-[0.3em] shadow-inner"
             />
             <button
               type="button"
               onClick={handleVerify}
               disabled={phase === 'verifying' || secondsLeft === 0 || otpInput.length < 6}
-              className="px-3 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               {phase === 'verifying' ? '...' : 'Submit'}
             </button>

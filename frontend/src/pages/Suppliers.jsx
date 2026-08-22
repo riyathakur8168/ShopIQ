@@ -24,12 +24,12 @@ export default function Suppliers() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6">
+      <div className="flex border-b border-slate-200 gap-3 sm:gap-6 overflow-x-auto custom-scrollbar">
         {['Directory', 'Purchase History', 'Payments'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 text-sm font-semibold transition-colors relative ${
+            className={`pb-3 text-sm font-semibold transition-colors relative whitespace-nowrap ${
               activeTab === tab ? 'text-primary-600' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -989,7 +989,7 @@ function PurchaseHistoryTab() {
       {/* Quick Add Supplier Modal */}
       {showQuickSupplierModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl border border-slate-100 animate-fade-in">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base font-black text-slate-900">Add New Supplier Quick-Form</h3>
               <button 
@@ -1074,7 +1074,7 @@ function PurchaseHistoryTab() {
       {/* Quick Add Product Modal */}
       {showQuickProductModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl border border-slate-100 animate-fade-in">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base font-black text-slate-900">Add New Product Quick-Form</h3>
               <button 

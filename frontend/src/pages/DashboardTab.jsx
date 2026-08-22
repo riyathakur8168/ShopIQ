@@ -50,7 +50,7 @@ export default function DashboardTab({ setActiveTab }) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Today's Revenue", value: `₹${data.today?.revenue?.toLocaleString() || 0}`, sub: `${data.today?.count || 0} sales`, color: 'text-green-600' },
           { label: 'Monthly Revenue', value: `₹${data.monthly?.revenue?.toLocaleString() || 0}`, sub: `${data.monthly?.count || 0} sales`, color: 'text-primary-600' },

@@ -15,6 +15,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const loadNotifications = () => {
     getInventoryNotifications()
@@ -43,14 +44,31 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} lowStockCount={notifications.length} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        lowStockCount={notifications.length} 
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
+      />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top Navbar */}
-        <header className="h-16 bg-white border-b border-surface-border flex items-center justify-between px-6 flex-shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10">
+        <header className="h-16 bg-white border-b border-surface-border flex items-center justify-between px-3 sm:px-6 flex-shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10 gap-2">
+          
+          {/* Mobile Menu Toggle Button */}
+          <button
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="p-2 text-slate-500 hover:text-slate-900 lg:hidden rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0"
+            title="Open menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           
           {/* Search Bar */}
-          <div className="flex-1 max-w-md">
+          <div className="flex-1 max-w-md min-w-0">
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -58,13 +76,13 @@ export default function Dashboard() {
               <input 
                 type="text" 
                 placeholder="Search products, customers, or bills..." 
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors"
+                className="w-full pl-9 pr-3 sm:pl-10 sm:pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors truncate"
               />
             </div>
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-4 ml-4">
+          <div className="flex items-center gap-2 sm:gap-4 ml-1 sm:ml-4 flex-shrink-0">
             <div className="relative">
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -141,7 +159,7 @@ export default function Dashboard() {
         </header>
 
         {/* Page content */}
-        <main className={`flex-1 overflow-hidden bg-slate-50 ${activeTab === 'POS Counter' ? 'p-0' : 'p-6 lg:p-8 overflow-y-auto'}`}>
+        <main className={`flex-1 overflow-hidden bg-slate-50 ${activeTab === 'POS Counter' ? 'p-0' : 'p-3 sm:p-6 lg:p-8 overflow-y-auto'}`}>
           {renderPage()}
         </main>
       </div>

@@ -15,12 +15,12 @@ export default function Inventory() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6">
+      <div className="flex border-b border-slate-200 gap-3 sm:gap-6 overflow-x-auto custom-scrollbar">
         {['Products', 'Stock', 'OCR Import', 'Categories'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 text-sm font-semibold transition-colors relative ${
+            className={`pb-3 text-sm font-semibold transition-colors relative whitespace-nowrap ${
               activeTab === tab ? 'text-primary-600' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -190,10 +190,10 @@ function ProductsTab() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
         <input className="input max-w-xs border-slate-200" placeholder="🔍 Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto custom-scrollbar max-w-full pb-1">
           {categories.map(c => (
             <button key={c} onClick={() => { setCatFilter(c); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${catFilter === c ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:text-slate-900 border border-slate-200'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${catFilter === c ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:text-slate-900 border border-slate-200'}`}>
               {c}
             </button>
           ))}

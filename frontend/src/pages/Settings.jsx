@@ -35,14 +35,14 @@ export default function Settings() {
 
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar Tabs */}
-        <div className="w-full md:w-64 flex flex-col gap-1">
+        <div className="w-full md:w-64 flex flex-row md:flex-col gap-1 overflow-x-auto custom-scrollbar pb-2 md:pb-0 flex-shrink-0">
           {['Profile', 'Notifications', 'Security', 'Billing Plan'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-3 text-sm font-semibold rounded-xl text-left transition-colors ${
+              className={`px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl text-left transition-colors whitespace-nowrap ${
                 activeTab === tab 
-                  ? 'bg-primary-50 text-primary-700' 
+                  ? 'bg-primary-50 text-primary-700 font-bold' 
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
