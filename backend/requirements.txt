@@ -7,3 +7,6 @@ psycopg2-binary==2.9.9
 # Rate limiting (optional — for multi-worker deployments, configure with Redis backend)
 # flask-limiter==3.5.0
 werkzeug==3.0.3
+python-dotenv==1.2.2
+
+python-dotenv 
