@@ -3,10 +3,16 @@ from flask import current_app
 
 
 def send_email_otp(to_email: str, otp: str):
-    resend.api_key = current_app.config["RESEND_API_KEY"]
+    api_key = current_app.config.get("RESEND_API_KEY")
+    if not api_key:
+        print("[WARNING] RESEND_API_KEY not set in environment. Email OTP not dispatched.")
+        return None
+
+    resend.api_key = api_key
+    from_email = current_app.config.get("FROM_EMAIL") or "onboarding@resend.dev"
 
     params = {
-        "from": current_app.config["FROM_EMAIL"],
+        "from": from_email,
         "to": [to_email],
         "subject": "ShopIQ Email Verification OTP",
         "html": f"""
@@ -39,4 +45,8 @@ def send_email_otp(to_email: str, otp: str):
         """
     }
 
-    return resend.Emails.send(params)
+    try:
+        return resend.Emails.send(params)
+    except Exception as e:
+        print(f"[ERROR] Resend API error: {e}")
+        return None
