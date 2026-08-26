@@ -385,3 +385,4 @@ def forgot_password_reset():
     user.set_password(password)
     db.session.commit()
     return jsonify({'message': 'Password updated successfully!'}), 200
+
