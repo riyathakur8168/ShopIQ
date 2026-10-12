@@ -19,6 +19,5 @@ build/
 # OS
 .DS_Store
 Thumbs.db
-
 # Project specific
 last_uploaded_filename.txt
