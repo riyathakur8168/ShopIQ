@@ -1,4 +1,4 @@
-import resend
+ppimport resend
 from flask import current_app
 
 
@@ -50,3 +50,4 @@ def send_email_otp(to_email: str, otp: str):
     except Exception as e:
         print(f"[ERROR] Resend API error: {e}")
         return None
+
