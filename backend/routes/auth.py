@@ -522,3 +522,4 @@ def change_password():
     user.set_password(new_pwd)
     db.session.commit()
     return jsonify({'message': 'Password changed successfully!'}), 200
+
