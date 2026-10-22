@@ -113,8 +113,9 @@ function ProductsTab() {
       toast('Product deleted', 'success'); 
       load(); 
       window.dispatchEvent(new Event('update-notifications'));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to delete product', 'error');
     }
-    catch { toast('Failed to delete', 'error'); }
   };
 
   const stockStatus = (p) => {

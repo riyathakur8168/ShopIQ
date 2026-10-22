@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { updateProfile, changePassword } from '../services/api';
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('Profile');
   
@@ -15,15 +16,54 @@ export default function Settings() {
     address: user?.store_address || '',
   });
 
-  const [saving, setSaving] = useState(false);
+  const [passwords, setPasswords] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
 
-  const handleSave = (e) => {
+  const [saving, setSaving] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setTimeout(() => {
+    try {
+      const res = await updateProfile({
+        shop_name: profile.shopName,
+        name: profile.ownerName,
+        phone: profile.phone,
+        store_address: profile.address
+      });
+      if (res.data?.user) {
+        updateUser(res.data.user);
+      }
+      toast('Store settings saved successfully!', 'success');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to save settings.', 'error');
+    } finally {
       setSaving(false);
-      toast('Settings saved successfully!', 'success');
-    }, 800);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      return toast('New passwords do not match.', 'error');
+    }
+    setUpdatingPassword(true);
+    try {
+      await changePassword({
+        current_password: passwords.currentPassword,
+        new_password: passwords.newPassword
+      });
+      toast('Password changed successfully!', 'success');
+      setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to update password.', 'error');
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   return (
@@ -67,7 +107,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <form onSubmit={handleSave} className="space-y-5">
+              <form onSubmit={handleSaveProfile} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="input-label">Store Name</label>
@@ -150,22 +190,43 @@ export default function Settings() {
           {activeTab === 'Security' && (
             <div className="card p-6 shadow-sm border-slate-200 animate-fade-in">
               <h3 className="text-base font-bold text-slate-900 mb-6">Security Settings</h3>
-              <form onSubmit={handleSave} className="space-y-4 max-w-sm">
+              <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
                 <div>
                   <label className="input-label">Current Password</label>
-                  <input type="password" className="input" placeholder="••••••••" />
+                  <input 
+                    type="password" 
+                    className="input" 
+                    placeholder="••••••••" 
+                    required 
+                    value={passwords.currentPassword} 
+                    onChange={e => setPasswords({...passwords, currentPassword: e.target.value})} 
+                  />
                 </div>
                 <div>
                   <label className="input-label">New Password</label>
-                  <input type="password" className="input" placeholder="••••••••" />
+                  <input 
+                    type="password" 
+                    className="input" 
+                    placeholder="••••••••" 
+                    required 
+                    value={passwords.newPassword} 
+                    onChange={e => setPasswords({...passwords, newPassword: e.target.value})} 
+                  />
                 </div>
                 <div>
                   <label className="input-label">Confirm New Password</label>
-                  <input type="password" className="input" placeholder="••••••••" />
+                  <input 
+                    type="password" 
+                    className="input" 
+                    placeholder="••••••••" 
+                    required 
+                    value={passwords.confirmPassword} 
+                    onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} 
+                  />
                 </div>
                 <div className="pt-4">
-                  <button type="submit" disabled={saving} className="btn-primary shadow-sm w-full">
-                    Update Password
+                  <button type="submit" disabled={updatingPassword} className="btn-primary shadow-sm w-full">
+                    {updatingPassword ? 'Updating...' : 'Update Password'}
                   </button>
                 </div>
               </form>

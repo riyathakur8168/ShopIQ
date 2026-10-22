@@ -103,10 +103,23 @@ function DirectoryTab() {
     return "";
   };
 
+  const normalizeMobile = (val) => {
+    let digits = (val || '').replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    return digits.slice(0, 10);
+  };
+
   const validatePhone = (val) => {
-    const digits = val.replace(/\D/g, '');
+    const digits = normalizeMobile(val);
     if (!digits) return "Mobile Number is required.";
-    if (digits.length !== 10 || !/^[6-9]/.test(digits)) {
+    if (!/^[6-9]/.test(digits)) {
+      return `Indian mobile numbers cannot start with '${digits[0]}'. Must start with 6, 7, 8, or 9.`;
+    }
+    if (digits.length !== 10) {
       return "Please enter a valid 10-digit Indian mobile number.";
     }
     return "";
@@ -163,7 +176,7 @@ function DirectoryTab() {
   };
 
   const handlePhoneChange = async (val) => {
-    const digits = val.replace(/\D/g, '').slice(0, 10);
+    const digits = normalizeMobile(val);
     setForm(f => ({ ...f, phone: digits }));
     setTouched(t => ({ ...t, phone: true }));
     

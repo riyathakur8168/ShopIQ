@@ -1,9 +1,10 @@
+import re
+import json
+from datetime import datetime, date
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Supplier, SupplierRecord, Product
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime, date
-import json
 
 suppliers_bp = Blueprint('suppliers', __name__, url_prefix='/api/suppliers')
 
@@ -11,12 +12,23 @@ suppliers_bp = Blueprint('suppliers', __name__, url_prefix='/api/suppliers')
 def _uid():
     return int(get_jwt_identity())
 
-import re
+
+def _normalize_indian_phone(phone_str):
+    """Normalize phone number to 10 digits (handling +91, 91, or leading 0)."""
+    if not phone_str:
+        return ''
+    digits = re.sub(r'\D', '', str(phone_str))
+    if len(digits) == 12 and digits.startswith('91'):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith('0'):
+        digits = digits[1:]
+    return digits
+
 
 def validate_supplier_data(data):
     name = data.get('name', '').strip()
     business_name = data.get('business_name', '').strip()
-    phone = data.get('phone', '').strip()
+    phone = _normalize_indian_phone(data.get('phone', ''))
     email = data.get('email', '').strip()
 
     if not name:
@@ -35,6 +47,8 @@ def validate_supplier_data(data):
 
     if not phone:
         return 'Phone Number is required.'
+    if phone and not phone[0] in '6789':
+        return f"Invalid mobile number: Indian mobile numbers cannot start with '{phone[0]}'. Must start with 6, 7, 8, or 9."
     if not re.match(r'^[6-9]\d{9}$', phone):
         return 'Please enter a valid 10-digit Indian mobile number.'
 
@@ -96,7 +110,7 @@ def add_supplier():
         name=data['name'].strip(),
         business_name=data['business_name'].strip(),
         contact_person=data.get('contact_person', '').strip(),
-        phone=data.get('phone', '').strip(),
+        phone=_normalize_indian_phone(data.get('phone', '')),
         email=data.get('email', '').strip(),
         gst_number=data.get('gst_number', '').strip(),
         address=data.get('address', '').strip(),
@@ -161,7 +175,7 @@ def update_supplier(supplier_id):
     supplier.name = data.get('name', supplier.name).strip()
     supplier.business_name = data.get('business_name', supplier.business_name).strip()
     supplier.contact_person = data.get('contact_person', supplier.contact_person).strip()
-    supplier.phone = data.get('phone', supplier.phone).strip()
+    supplier.phone = _normalize_indian_phone(data.get('phone', supplier.phone))
     supplier.email = data.get('email', supplier.email).strip()
     supplier.gst_number = data.get('gst_number', supplier.gst_number).strip()
     supplier.address = data.get('address', supplier.address).strip()

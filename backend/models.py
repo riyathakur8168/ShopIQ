@@ -21,6 +21,23 @@ class User(db.Model):
     business_setup_completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    def __init__(self, name='', first_name='', last_name='', phone='', email='', password_hash='', role='owner', shop_name='My Shop', store_address='', gst_number='', store_type='', is_setup_completed=False, business_setup_completed=False, **kwargs):
+        self.name = name
+        self.first_name = first_name
+        self.last_name = last_name
+        self.phone = phone
+        self.email = email
+        self.password_hash = password_hash
+        self.role = role
+        self.shop_name = shop_name
+        self.store_address = store_address
+        self.gst_number = gst_number
+        self.store_type = store_type
+        self.is_setup_completed = is_setup_completed
+        self.business_setup_completed = business_setup_completed
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -53,6 +70,12 @@ class Category(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     products = db.relationship('Product', backref='category_rel', lazy=True)
 
+    def __init__(self, name, user_id=None, **kwargs):
+        self.name = name
+        self.user_id = user_id
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -74,18 +97,20 @@ class Product(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     company_name = db.Column(db.String(150), default='')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    sales = db.relationship('Sale', backref='product', lazy=True, cascade="all, delete-orphan")
+    sales = db.relationship('Sale', backref='product', lazy=True)
 
-    def __init__(self, name, category='General', buy_price=0, sell_price=0, stock_quantity=0, low_stock_threshold=10, category_id=None, user_id=None, company_name=''):
+    def __init__(self, name='', category='General', buy_price=0.0, sell_price=0.0, stock_quantity=0, low_stock_threshold=10, category_id=None, user_id=None, company_name='', **kwargs):
         self.name = name
         self.category = category
-        self.buy_price = buy_price
-        self.sell_price = sell_price
-        self.stock_quantity = stock_quantity
-        self.low_stock_threshold = low_stock_threshold
+        self.buy_price = float(buy_price) if buy_price is not None else 0.0
+        self.sell_price = float(sell_price) if sell_price is not None else 0.0
+        self.stock_quantity = int(stock_quantity) if stock_quantity is not None else 0
+        self.low_stock_threshold = int(low_stock_threshold) if low_stock_threshold is not None else 10
         self.category_id = category_id
         self.user_id = user_id
         self.company_name = company_name
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def to_dict(self):
         return {
@@ -117,16 +142,18 @@ class Sale(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    def __init__(self, product_id, quantity, unit_price, total_amount, sale_date=None, note='', source_file='POS', user_id=None):
+    def __init__(self, product_id=None, quantity=1, unit_price=0.0, total_amount=0.0, sale_date=None, note='', source_file='POS', user_id=None, **kwargs):
         self.product_id = product_id
-        self.quantity = quantity
-        self.unit_price = unit_price
-        self.total_amount = total_amount
+        self.quantity = int(quantity) if quantity is not None else 1
+        self.unit_price = float(unit_price) if unit_price is not None else 0.0
+        self.total_amount = float(total_amount) if total_amount is not None else 0.0
         if sale_date is not None:
             self.sale_date = sale_date
         self.note = note
         self.source_file = source_file
         self.user_id = user_id
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def to_dict(self):
         return {
@@ -157,6 +184,18 @@ class Customer(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     credit_records = db.relationship('CreditRecord', backref='customer', lazy=True, cascade="all, delete-orphan")
+
+    def __init__(self, name='', first_name='', last_name='', phone='', address='', total_credit=0.0, total_paid=0.0, user_id=None, **kwargs):
+        self.name = name
+        self.first_name = first_name
+        self.last_name = last_name
+        self.phone = phone
+        self.address = address
+        self.total_credit = total_credit
+        self.total_paid = total_paid
+        self.user_id = user_id
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     @property
     def balance(self):
@@ -195,6 +234,20 @@ class CreditRecord(db.Model):
     date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    def __init__(self, customer_id, record_type, amount, note='', products_purchased=None, quantity=None, bill_amount=None, bill_number=None, date=None, **kwargs):
+        self.customer_id = customer_id
+        self.record_type = record_type
+        self.amount = amount
+        self.note = note
+        self.products_purchased = products_purchased
+        self.quantity = quantity
+        self.bill_amount = bill_amount
+        self.bill_number = bill_number
+        if date is not None:
+            self.date = date
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -221,9 +274,22 @@ class Invoice(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    def __init__(self, customer_name, items_json, total_amount, invoice_date=None, user_id=None, **kwargs):
+        self.customer_name = customer_name
+        self.items_json = items_json
+        self.total_amount = total_amount
+        if invoice_date is not None:
+            self.invoice_date = invoice_date
+        self.user_id = user_id
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     @property
     def items(self):
-        return json.loads(self.items_json)
+        try:
+            return json.loads(self.items_json) if self.items_json else []
+        except Exception:
+            return []
 
     def to_dict(self):
         return {
@@ -256,6 +322,26 @@ class Supplier(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     records = db.relationship('SupplierRecord', backref='supplier', lazy=True, cascade="all, delete-orphan")
+
+    def __init__(self, name, business_name, contact_person='', phone='', email='', gst_number='', address='', city='', state='', pincode='', product_category='', notes='', status='Active', total_purchase=0.0, total_paid=0.0, user_id=None, **kwargs):
+        self.name = name
+        self.business_name = business_name
+        self.contact_person = contact_person
+        self.phone = phone
+        self.email = email
+        self.gst_number = gst_number
+        self.address = address
+        self.city = city
+        self.state = state
+        self.pincode = pincode
+        self.product_category = product_category
+        self.notes = notes
+        self.status = status
+        self.total_purchase = total_purchase
+        self.total_paid = total_paid
+        self.user_id = user_id
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     @property
     def balance(self):
@@ -299,6 +385,19 @@ class SupplierRecord(db.Model):
     date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    def __init__(self, supplier_id, record_type, amount, note='', products_purchased=None, quantity=None, invoice_number=None, date=None, **kwargs):
+        self.supplier_id = supplier_id
+        self.record_type = record_type
+        self.amount = amount
+        self.note = note
+        self.products_purchased = products_purchased
+        self.quantity = quantity
+        self.invoice_number = invoice_number
+        if date is not None:
+            self.date = date
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -317,6 +416,12 @@ class SystemState(db.Model):
     __tablename__ = 'system_state'
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.Text, nullable=False)
+
+    def __init__(self, key, value, **kwargs):
+        self.key = key
+        self.value = value
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 from sqlalchemy import event

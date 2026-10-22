@@ -1,3 +1,4 @@
+import re
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Supplier, Product, Category
@@ -6,12 +7,23 @@ from datetime import datetime, timezone
 
 purchases_bp = Blueprint('purchases', __name__, url_prefix='/api/v1/purchases')
 
-import re
+
+def _normalize_indian_phone(phone_str):
+    """Normalize phone number to 10 digits (handling +91, 91, or leading 0)."""
+    if not phone_str:
+        return ''
+    digits = re.sub(r'\D', '', str(phone_str))
+    if len(digits) == 12 and digits.startswith('91'):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith('0'):
+        digits = digits[1:]
+    return digits
+
 
 def validate_supplier_data(data):
     name = data.get('name', '').strip()
     business_name = data.get('business_name', '').strip()
-    phone = data.get('phone', '').strip()
+    phone = _normalize_indian_phone(data.get('phone', ''))
     email = data.get('email', '').strip()
 
     if not name:
@@ -55,7 +67,7 @@ def quick_supplier():
 
     name = data.get('name', '').strip()
     business_name = data.get('business_name', '').strip() or name
-    phone = data.get('phone', '').strip()
+    phone = _normalize_indian_phone(data.get('phone', ''))
     email = data.get('email', '').strip()
         
     # Check if a supplier with the same business_name already exists for this user

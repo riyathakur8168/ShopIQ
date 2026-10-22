@@ -27,8 +27,8 @@ export default function AIAssistant() {
 
   useEffect(() => {
     getSalesAnalytics().then(r => setAnalytics(r.data)).catch(err => console.error(err));
-    getProducts().then(r => setProducts(r.data)).catch(err => console.error(err));
-    getCustomers().then(r => setCustomers(r.data)).catch(err => console.error(err));
+    getProducts().then(r => setProducts(Array.isArray(r.data) ? r.data : (r.data?.items || []))).catch(err => console.error(err));
+    getCustomers().then(r => setCustomers(Array.isArray(r.data) ? r.data : (r.data?.items || []))).catch(err => console.error(err));
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);

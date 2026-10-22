@@ -51,15 +51,30 @@ BUSINESS_TEMPLATES = {
         'products': [
             {'name': 'T-Shirt', 'category': "Men's Wear", 'buy_price': 250.0, 'sell_price': 399.0, 'stock_quantity': 40, 'low_stock_threshold': 5},
         ]
+    },
+    'Stationery Store': {
+        'categories': ['Notebooks', 'Pens & Pencils', 'Files & Folders', 'Art Supplies', 'Desk Accessories'],
+        'products': [
+            {'name': 'Spiral Notebook', 'category': 'Notebooks', 'buy_price': 40.0, 'sell_price': 60.0, 'stock_quantity': 100, 'low_stock_threshold': 20},
+            {'name': 'Ballpoint Pen Set', 'category': 'Pens & Pencils', 'buy_price': 25.0, 'sell_price': 40.0, 'stock_quantity': 150, 'low_stock_threshold': 30},
+        ]
     }
 }
 
-# Keep aliases of old names to new types for compatibility
+# Map frontend store type options to internal templates
 STORE_TYPE_ALIASES = {
-    'Electrical Store': 'Hardware Store',
-    'Mobile Shop': 'Electronics Store',
-    'Medical Store': 'Pharmacy',
-    'Garment Store': 'Clothing Store'
+    'Clothing Store': 'Garment Store',
+    'Garment Store': 'Garment Store',
+    'Electronics Store': 'Mobile Shop',
+    'Mobile Shop': 'Mobile Shop',
+    'Pharmacy': 'Medical Store',
+    'Medical Store': 'Medical Store',
+    'Department Store': 'Grocery Store',
+    'Grocery Store': 'Grocery Store',
+    'Electrical Store': 'Electrical Store',
+    'Hardware Store': 'Hardware Store',
+    'Stationery Store': 'Stationery Store',
+    'Cosmetics Store': 'Cosmetics Store'
 }
 
 def initialize_pos_for_business(store_type, user_id=None):

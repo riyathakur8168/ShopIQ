@@ -1,1 +1,2 @@
-// This file is deprecated and no longer used.
+// Re-export POSCounter for backward compatibility
+export { default } from './POSCounter';

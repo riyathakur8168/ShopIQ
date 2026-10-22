@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API = axios.create({ baseURL: 'https://shopiq-iq8c.onrender.com/api' });
+const API = axios.create({ 
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://shopiq-iq8c.onrender.com/api')
+});
 
 // Attach JWT token to every request
 API.interceptors.request.use((config) => {
@@ -9,11 +11,13 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-logout on 401 or 422 (invalid token)
+// Auto-logout on 401 or 422 (invalid token) — except on login/signup routes
 API.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 || err.response?.status === 422) {
+    const url = err.config?.url || '';
+    const isAuthRoute = url.includes('/auth/login') || url.includes('/auth/signup') || url.includes('/auth/verify-otp') || url.includes('/auth/send-otp');
+    if (!isAuthRoute && (err.response?.status === 401 || err.response?.status === 422)) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -32,6 +36,8 @@ export const verifyOtp = (type, value, otp) => API.post('/auth/verify-otp', { ty
 export const sendForgotPasswordOtp = (type, value) => API.post('/auth/forgot-password/send-otp', { type, value });
 export const verifyForgotPasswordOtp = (type, value, otp) => API.post('/auth/forgot-password/verify-otp', { type, value, otp });
 export const resetForgotPassword = (type, value, otp, password) => API.post('/auth/forgot-password/reset', { type, value, otp, password });
+export const updateProfile = (data) => API.put('/auth/profile', data);
+export const changePassword = (data) => API.post('/auth/change-password', data);
 export const getPublicMetrics = () => API.get('/public/metrics');
 
 // Products
@@ -55,6 +61,7 @@ export const uploadOCRImage = (file) => {
 // Sales
 export const getSales = (params) => API.get('/sales/', { params });
 export const addSale = (data) => API.post('/sales/', data);
+export const checkoutPOS = (data) => API.post('/sales/checkout', data);
 export const deleteSale = (id) => API.delete(`/sales/${id}`);
 export const getSalesAnalytics = (params) => API.get('/sales/analytics', { params });
 export const uploadSalesCSV = (file) => {

@@ -1,3 +1,4 @@
+import re
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Customer, CreditRecord
@@ -10,6 +11,18 @@ customers_bp = Blueprint('customers', __name__, url_prefix='/api/customers')
 def _current_user_id():
     """Return the integer user ID from the JWT token."""
     return int(get_jwt_identity())
+
+
+def _normalize_indian_phone(phone_str):
+    """Normalize phone number to 10 digits (handling +91, 91, or leading 0)."""
+    if not phone_str:
+        return ''
+    digits = re.sub(r'\D', '', str(phone_str))
+    if len(digits) == 12 and digits.startswith('91'):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith('0'):
+        digits = digits[1:]
+    return digits
 
 
 @customers_bp.route('/', methods=['GET'])
@@ -52,15 +65,13 @@ def check_phone():
     exclude_id = request.args.get('exclude_id', type=int)
     if not phone:
         return jsonify({'exists': False}), 200
-    phone_digits = re.sub(r'\D', '', phone)
+    phone_digits = _normalize_indian_phone(phone)
     query = Customer.query.filter_by(phone=phone_digits, user_id=uid)
     if exclude_id:
         query = query.filter(Customer.id != exclude_id)
     exists = query.first() is not None
     return jsonify({'exists': exists}), 200
 
-
-import re
 
 def _validate_and_format_customer(data, uid, exclude_id=None):
     if not data:
@@ -98,8 +109,11 @@ def _validate_and_format_customer(data, uid, exclude_id=None):
     if not raw_phone or not str(raw_phone).strip():
         return None, None, None, "Mobile Number is required."
         
-    phone_digits = re.sub(r'\D', '', str(raw_phone))
-    if len(phone_digits) != 10 or not phone_digits[0] in '6789':
+    phone_digits = _normalize_indian_phone(raw_phone)
+    if not phone_digits or not phone_digits[0] in '6789':
+        first_char = phone_digits[0] if phone_digits else ''
+        return None, None, None, f"Invalid mobile number: Indian mobile numbers cannot start with '{first_char}'. Must start with 6, 7, 8, or 9." if first_char else "Please enter a valid 10-digit Indian mobile number."
+    if len(phone_digits) != 10:
         return None, None, None, "Please enter a valid 10-digit Indian mobile number."
 
     # 4. Duplicate mobile number check

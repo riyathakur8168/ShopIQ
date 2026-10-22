@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { getProducts, getCustomers, addSale, addCredit, createInvoice, addCustomer, getCategories, checkCustomerPhone } from '../services/api';
+import { getProducts, getCustomers, addSale, checkoutPOS, addCredit, createInvoice, addCustomer, getCategories, checkCustomerPhone } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
 export default function POSCounter({ setActiveTab }) {
@@ -87,10 +87,23 @@ export default function POSCounter({ setActiveTab }) {
     return "";
   };
 
+  const normalizeMobile = (val) => {
+    let digits = (val || '').replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    return digits.slice(0, 10);
+  };
+
   const validatePhone = (val) => {
-    const digits = val.replace(/\D/g, '');
+    const digits = normalizeMobile(val);
     if (!digits) return "Mobile Number is required.";
-    if (digits.length !== 10 || !/^[6-9]/.test(digits)) {
+    if (!/^[6-9]/.test(digits)) {
+      return `Indian mobile numbers cannot start with '${digits[0]}'. Must start with 6, 7, 8, or 9.`;
+    }
+    if (digits.length !== 10) {
       return "Please enter a valid 10-digit Indian mobile number.";
     }
     return "";
@@ -147,7 +160,7 @@ export default function POSCounter({ setActiveTab }) {
   };
 
   const handleNewCustomerPhoneChange = async (val) => {
-    const digits = val.replace(/\D/g, '').slice(0, 10);
+    const digits = normalizeMobile(val);
     setNewCustomer(c => ({ ...c, phone: digits }));
     setNewCustomerTouched(t => ({ ...t, phone: true }));
     
@@ -301,56 +314,26 @@ export default function POSCounter({ setActiveTab }) {
         finalCustomer = selectedCustomer;
       }
 
-      // 2. Process Sales
-      for (const item of cart) {
-        await addSale({
+      // 2. Process Complete Order Atomically via checkoutPOS
+      const payload = {
+        items: cart.map(item => ({
           product_id: item.id,
           quantity: item.cartQty,
-          unit_price: item.sell_price,
-          sale_date: new Date().toISOString().split('T')[0],
-          note: `POS Sale - ${paymentMethod}`
-        });
-      }
-
-      // 3. Generate Bill/Invoice
-      const invoicePayload = {
+          unit_price: item.sell_price
+        })),
+        customer_id: finalCustomer ? finalCustomer.id : null,
         customer_name: finalCustomer ? finalCustomer.name : 'Walk-in Customer',
-        items: cart.map(item => ({
-          name: item.name,
-          qty: item.cartQty,
-          price: item.sell_price
-        }))
+        payment_method: paymentMethod,
+        sale_date: new Date().toISOString().split('T')[0]
       };
-      const invRes = await createInvoice(invoicePayload);
 
-      // 4. Process Udhar — send complete cart so ledger stores full product details
-      if (paymentMethod === 'Udhar' && finalCustomer) {
-        const billNumber = invRes.data?.invoice?.id
-          ? String(invRes.data.invoice.id)
-          : String(Math.floor(Date.now() / 1000));
-
-        const productsJSON = JSON.stringify(cart.map(item => ({
-          name:       item.name,
-          quantity:   item.cartQty,
-          unit_price: item.sell_price,
-          total:      item.sell_price * item.cartQty
-        })));
-
-        await addCredit(finalCustomer.id, {
-          amount:             totalAmount,
-          bill_amount:        totalAmount,
-          bill_number:        billNumber,
-          products_purchased: productsJSON,
-          quantity:           cart.reduce((s, i) => s + i.cartQty, 0),
-          note:               'POS Udhar Sale',
-          date:               new Date().toISOString().split('T')[0]
-        });
-      }
+      const res = await checkoutPOS(payload);
+      const invoiceData = res.data.invoice || {};
 
       toast(`Sale recorded & bill generated for ₹${totalAmount.toLocaleString()}!`, 'success');
       
-      // 5. Trigger Native Print
-      triggerPrint(invRes.data?.invoice || {}, finalCustomer, cart, totalAmount, paymentMethod);
+      // 3. Trigger Native Print
+      triggerPrint(invoiceData, finalCustomer, cart, totalAmount, paymentMethod);
 
       // Reset Form
       setCart([]);
@@ -364,12 +347,14 @@ export default function POSCounter({ setActiveTab }) {
       // Update inventory states
       window.dispatchEvent(new Event('update-notifications'));
       
-      // Refetch products & categories to update UI
-      const [prodRes, catRes] = await Promise.all([
+      // Refetch products, customers & categories to update UI
+      const [prodRes, custRes, catRes] = await Promise.all([
         getProducts({ per_page: 100 }),
+        getCustomers({ per_page: 100 }),
         getCategories()
       ]);
       setProducts(prodRes.data.items || prodRes.data || []);
+      setCustomers(custRes.data.items || custRes.data || []);
       const backendCats = catRes.data || [];
       setCategories(['All', ...backendCats.map(c => c.name)]);
       

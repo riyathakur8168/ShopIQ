@@ -38,7 +38,7 @@ export default function SalesReports() {
         `;
       } else if (type === 'inventory') {
         const res = await getProducts();
-        const products = res.data || [];
+        const products = Array.isArray(res.data) ? res.data : (res.data?.items || []);
         
         const totalVal = products.reduce((sum, p) => sum + (p.buy_price * p.stock_quantity), 0);
         

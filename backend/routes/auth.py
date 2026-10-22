@@ -34,10 +34,31 @@ def _verify_otp(key: str, submitted: str) -> tuple[bool, str]:
     _OTP_STORE.pop(key, None)  # Consume OTP on success
     return True, ''
 
+def _normalize_indian_mobile(phone_str: str) -> tuple[str, str | None]:
+    """
+    Normalizes Indian mobile number by stripping non-digits and leading +91 or 0.
+    Returns (cleaned_10_digits, error_message).
+    Valid Indian mobile numbers must be exactly 10 digits and start with 6, 7, 8, or 9.
+    """
+    if not phone_str or not str(phone_str).strip():
+        return '', 'Mobile number is required.'
+    digits = re.sub(r'\D', '', str(phone_str))
+    if len(digits) == 12 and digits.startswith('91'):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith('0'):
+        digits = digits[1:]
+
+    if len(digits) != 10:
+        return '', 'Mobile number must contain exactly 10 digits.'
+    if digits[0] not in '6789':
+        return '', f'Invalid mobile number: Indian mobile numbers cannot start with "{digits[0]}". Must start with 6, 7, 8, or 9.'
+    return digits, None
+
+
 # ── OTP Routes ──────────────────────────────────────────────────────────────
 
 @auth_bp.route('/send-otp', methods=['POST'])
-@rate_limit(max_calls=5, window_seconds=60)
+@rate_limit(max_calls=15, window_seconds=60)
 def send_otp():
     data = request.get_json() or {}
     otp_type = data.get('type')  # 'email' or 'phone'
@@ -46,27 +67,56 @@ def send_otp():
     if otp_type == 'email':
         if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', value):
             return jsonify({'message': 'Please enter a valid email address.'}), 400
+        
+        email_clean = value.lower()
+        otp = _make_otp()
+        _store_otp(f'email:{email_clean}', otp)
 
-    otp = _make_otp()
-    _store_otp(f'email:{value.lower()}', otp)
+        print(f"\n{'='*60}")
+        print(f"[DEV TRACKER] Email OTP Dispatched")
+        print(f"Target:   {email_clean}")
+        print(f"OTP Code: {otp}")
+        print(f"Expires:  2 minutes")
+        print(f"{'='*60}\n", flush=True)
 
-    try:
-        send_email_otp(value.lower(), otp)
+        email_dispatched = False
+        try:
+            res = send_email_otp(email_clean, otp)
+            email_dispatched = res is not None
+        except Exception as e:
+            print(f"[WARNING] Email service exception: {e}", flush=True)
 
+        msg = f"OTP sent to {value}." if email_dispatched else f"Verification OTP generated for {value}."
         return jsonify({
-            "message": f"OTP sent successfully to {value}"
+            "message": msg,
+            "dev_otp": otp
         }), 200
 
-    except Exception as e:
-        print("Email Error:", e)
+    elif otp_type == 'phone':
+        digits, err = _normalize_indian_mobile(value)
+        if err:
+            return jsonify({'message': err}), 400
+
+        otp = _make_otp()
+        _store_otp(f'phone:{digits}', otp)
+
+        print(f"\n{'='*60}")
+        print(f"[DEV TRACKER] Mobile OTP Dispatched")
+        print(f"Target:   +91 {digits}")
+        print(f"OTP Code: {otp}")
+        print(f"Expires:  2 minutes")
+        print(f"{'='*60}\n", flush=True)
+
         return jsonify({
-            "message": "Failed to send OTP email."
-        }), 500
+            "message": f"OTP sent to {digits}.",
+            "dev_otp": otp
+        }), 200
+
     return jsonify({'message': 'Invalid OTP type. Must be email or phone.'}), 400
 
 
 @auth_bp.route('/verify-otp', methods=['POST'])
-@rate_limit(max_calls=10, window_seconds=60)
+@rate_limit(max_calls=20, window_seconds=60)
 def verify_otp():
     data = request.get_json() or {}
     otp_type = data.get('type')
@@ -79,7 +129,8 @@ def verify_otp():
     if otp_type == 'email':
         key = f'email:{value.lower()}'
     elif otp_type == 'phone':
-        key = f'phone:{re.sub(r"\\D", "", value)}'
+        digits, _ = _normalize_indian_mobile(value)
+        key = f'phone:{digits or re.sub(r"\D", "", value)}'
     else:
         return jsonify({'message': 'Invalid OTP type.'}), 400
 
@@ -145,16 +196,21 @@ def signup():
 
     # Check for duplicate mobile number (only if phone is provided)
     phone = data.get('phone', '').strip()
+    phone_clean = ''
     if phone:
-        existing_phone_user = User.query.filter_by(phone=phone).first()
+        digits, err = _normalize_indian_mobile(phone)
+        if err:
+            return jsonify({'message': err}), 400
+        existing_phone_user = User.query.filter_by(phone=digits).first()
         if existing_phone_user:
             return jsonify({'message': 'An account with this mobile number already exists. Please Sign In.'}), 400
+        phone_clean = digits
 
     new_user = User(
         name=f"{data['first_name'].strip()} {data['last_name'].strip()}",
         first_name=data['first_name'].strip(),
         last_name=data['last_name'].strip(),
-        phone=data.get('phone', '').strip(),
+        phone=phone_clean,
         email=email
     )
     new_user.set_password(data['password'])
@@ -265,7 +321,7 @@ def get_me():
 
     # Auto-align setup completed status for existing users (Additional Check)
     from models import Category
-    has_categories = Category.query.count() > 0
+    has_categories = Category.query.filter_by(user_id=user.id).count() > 0
     if user.shop_name and user.store_type and has_categories:
         if not user.business_setup_completed:
             user.business_setup_completed = True
@@ -293,9 +349,9 @@ def forgot_password_send_otp():
         user = User.query.filter_by(email=value.lower()).first()
         key = f'forgot:email:{value.lower()}'
     else:
-        digits = re.sub(r'\D', '', value)
-        if len(digits) != 10:
-            return jsonify({'message': 'Please enter a valid 10-digit Indian mobile number.'}), 400
+        digits, err = _normalize_indian_mobile(value)
+        if err:
+            return jsonify({'message': err}), 400
         user = User.query.filter_by(phone=digits).first()
         key = f'forgot:phone:{digits}'
 
@@ -305,13 +361,26 @@ def forgot_password_send_otp():
         otp = _make_otp()
         # Expiration is 5 minutes (300 seconds)
         _OTP_STORE[key] = {'otp': otp, 'expires_at': time.time() + 300}
-        print(f'[DEV] Forgot Password OTP for {value}: {otp}')
+        
+        print(f"\n{'='*60}")
+        print(f"[DEV TRACKER] Forgot Password OTP Generated")
+        print(f"Target:   {value}")
+        print(f"OTP Code: {otp}")
+        print(f"Expires:  5 minutes")
+        print(f"{'='*60}\n", flush=True)
+
+        if otp_type == 'email':
+            try:
+                send_email_otp(value.lower(), otp)
+            except Exception as e:
+                print(f"[WARNING] Failed to send email OTP: {e}", flush=True)
+
         return jsonify({
             'message': 'If this account exists, an OTP has been sent.',
             'dev_otp': otp
         }), 200
     else:
-        # User not found: do not send OTP, do not include dev_otp, but return success
+        # User not found: do not send OTP, return success message silently
         return jsonify({
             'message': 'If this account exists, an OTP has been sent.'
         }), 200
@@ -331,7 +400,8 @@ def forgot_password_verify_otp():
     if otp_type == 'email':
         key = f'forgot:email:{value.lower()}'
     elif otp_type == 'phone':
-        key = f'forgot:phone:{re.sub(r"\D", "", value)}'
+        digits, _ = _normalize_indian_mobile(value)
+        key = f'forgot:phone:{digits or re.sub(r"\D", "", value)}'
     else:
         return jsonify({'message': 'Invalid verification method.'}), 400
 
@@ -368,8 +438,10 @@ def forgot_password_reset():
         key = f'forgot:email:{value.lower()}'
         user = User.query.filter_by(email=value.lower()).first()
     elif otp_type == 'phone':
-        key = f'forgot:phone:{re.sub(r"\D", "", value)}'
-        user = User.query.filter_by(phone=re.sub(r"\D", "", value)).first()
+        digits, _ = _normalize_indian_mobile(value)
+        phone_key = digits or re.sub(r"\D", "", value)
+        key = f'forgot:phone:{phone_key}'
+        user = User.query.filter_by(phone=phone_key).first()
     else:
         return jsonify({'message': 'Invalid verification method.'}), 400
 
@@ -385,3 +457,68 @@ def forgot_password_reset():
     user.set_password(password)
     db.session.commit()
     return jsonify({'message': 'Password updated successfully!'}), 200
+
+
+@auth_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    current_user_id = get_jwt_identity()
+    user = db.session.get(User, int(current_user_id))
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    data = request.get_json() or {}
+    if 'shop_name' in data:
+        user.shop_name = data['shop_name'].strip()
+    if 'name' in data:
+        user.name = data['name'].strip()
+        parts = user.name.split(None, 1)
+        user.first_name = parts[0]
+        user.last_name = parts[1] if len(parts) > 1 else ''
+    if 'phone' in data:
+        raw_p = data['phone']
+        if raw_p:
+            cleaned_phone, err = _normalize_indian_mobile(raw_p)
+            if err:
+                return jsonify({'message': err}), 400
+            existing = User.query.filter(User.phone == cleaned_phone, User.id != user.id).first()
+            if existing:
+                return jsonify({'message': 'A user with this mobile number already exists.'}), 400
+            user.phone = cleaned_phone
+        else:
+            user.phone = None
+    if 'store_address' in data:
+        user.store_address = data['store_address'].strip()
+
+    db.session.commit()
+    return jsonify({
+        'message': 'Profile updated successfully',
+        'user': user.to_dict()
+    }), 200
+
+
+@auth_bp.route('/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    current_user_id = get_jwt_identity()
+    user = db.session.get(User, int(current_user_id))
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    data = request.get_json() or {}
+    current_pwd = data.get('current_password', '')
+    new_pwd = data.get('new_password', '')
+
+    if not current_pwd or not new_pwd:
+        return jsonify({'message': 'Current and new password are required.'}), 400
+
+    if not user.check_password(current_pwd):
+        return jsonify({'message': 'Incorrect current password.'}), 400
+
+    err_msg = _validate_password(new_pwd)
+    if err_msg:
+        return jsonify({'message': err_msg}), 400
+
+    user.set_password(new_pwd)
+    db.session.commit()
+    return jsonify({'message': 'Password changed successfully!'}), 200

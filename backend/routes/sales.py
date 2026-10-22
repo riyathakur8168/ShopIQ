@@ -116,14 +116,15 @@ def add_sale():
         
         # Append manual sales notice to last uploaded file if applicable
         try:
-            state = SystemState.query.filter_by(key='last_uploaded_filename').first()
+            state_key = f'last_uploaded_filename_{uid}'
+            state = SystemState.query.filter_by(key=state_key).first()
             if state:
                 content = state.value.strip()
                 if content and not content.endswith('(with manual sales)') and content not in ['Active Catalog', 'No sales recorded yet']:
                     state.value = f"{content} (with manual sales)"
                     db.session.commit()
             else:
-                new_state = SystemState(key='last_uploaded_filename', value='Active Catalog')
+                new_state = SystemState(key=state_key, value='Active Catalog')
                 db.session.add(new_state)
                 db.session.commit()
         except Exception:
@@ -135,6 +136,151 @@ def add_sale():
         import traceback
         traceback.print_exc()
         return jsonify({'message': f'Server error: {str(e)}'}), 500
+
+
+@sales_bp.route('/checkout', methods=['POST'])
+@jwt_required()
+def checkout():
+    """
+    Atomic transaction endpoint for completing a POS order:
+    1. Validates stock and calculates totals.
+    2. Deducts stock and creates Sale records for each item.
+    3. Creates Invoice record.
+    4. Records CreditRecord if payment_method is Udhar.
+    5. Commits atomically or rolls back cleanly on any failure.
+    """
+    from models import Invoice, CreditRecord, Customer
+    import json
+    uid = _uid()
+    try:
+        data = request.get_json() or {}
+        items = data.get('items', [])
+        if not items or not isinstance(items, list):
+            return jsonify({'message': 'Cart items must be a non-empty list'}), 400
+
+        payment_method = data.get('payment_method', 'Cash')
+        customer_id = data.get('customer_id')
+        customer_name = data.get('customer_name', 'Walk-in Customer')
+        sale_date_str = data.get('sale_date')
+        if sale_date_str:
+            try:
+                s_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                s_date = date.today()
+        else:
+            s_date = date.today()
+
+        customer = None
+        if customer_id:
+            customer = Customer.query.filter_by(id=customer_id, user_id=uid).first()
+            if customer:
+                customer_name = customer.name
+
+        if payment_method == 'Udhar' and not customer:
+            return jsonify({'message': 'Udhar payment requires an existing registered customer'}), 400
+
+        total_amount = 0.0
+        sale_records = []
+        invoice_items = []
+
+        # Validate and deduct stock for all products
+        for item in items:
+            p_id = item.get('product_id') or item.get('id')
+            try:
+                p_id = int(p_id)
+                qty = int(item.get('quantity') or item.get('cartQty') or 1)
+                unit_price = float(item.get('unit_price') or item.get('sell_price') or 0.0)
+            except (ValueError, TypeError):
+                return jsonify({'message': 'Invalid product quantity or price format'}), 400
+
+            if qty <= 0:
+                return jsonify({'message': 'Quantity must be greater than zero'}), 400
+
+            prod = db.session.query(Product).with_for_update().filter_by(id=p_id, user_id=uid).first()
+            if not prod:
+                return jsonify({'message': f'Product with ID {p_id} not found'}), 404
+
+            if prod.stock_quantity < qty:
+                return jsonify({'message': f'Insufficient stock for "{prod.name}". Available: {prod.stock_quantity}, requested: {qty}'}), 400
+
+            item_total = round(qty * unit_price, 2)
+            total_amount += item_total
+
+            prod.stock_quantity -= qty
+
+            sale = Sale(
+                product_id=prod.id,
+                quantity=qty,
+                unit_price=unit_price,
+                total_amount=item_total,
+                sale_date=s_date,
+                note=f"POS Sale - {payment_method}",
+                user_id=uid
+            )
+            sale_records.append(sale)
+            db.session.add(sale)
+
+            invoice_items.append({
+                'name': prod.name,
+                'qty': qty,
+                'price': unit_price,
+                'total': item_total
+            })
+
+        total_amount = round(total_amount, 2)
+
+        # Create Invoice
+        invoice = Invoice(
+            customer_name=customer_name,
+            items_json=json.dumps(invoice_items),
+            total_amount=total_amount,
+            invoice_date=s_date,
+            user_id=uid
+        )
+        db.session.add(invoice)
+        db.session.flush()
+
+        # If Udhar, record credit in ledger
+        if payment_method == 'Udhar' and customer:
+            products_json = json.dumps(invoice_items)
+            bill_number = str(invoice.id)
+            total_qty = sum(item['qty'] for item in invoice_items)
+
+            credit_rec = CreditRecord(
+                customer_id=customer.id,
+                record_type='credit',
+                amount=total_amount,
+                note='POS Udhar Sale',
+                products_purchased=products_json,
+                quantity=total_qty,
+                bill_amount=total_amount,
+                bill_number=bill_number,
+                date=s_date
+            )
+            db.session.add(credit_rec)
+            db.session.flush()
+
+            # Recalculate customer total_credit and total_paid
+            credit_sum = db.session.query(func.coalesce(func.sum(CreditRecord.amount), 0.0)).filter_by(customer_id=customer.id, record_type='credit').scalar()
+            paid_sum = db.session.query(func.coalesce(func.sum(CreditRecord.amount), 0.0)).filter_by(customer_id=customer.id, record_type='payment').scalar()
+            customer.total_credit = float(credit_sum)
+            customer.total_paid = float(paid_sum)
+
+        db.session.commit()
+        analytics_cache.clear()
+
+        return jsonify({
+            'message': 'Checkout completed successfully',
+            'invoice': invoice.to_dict(),
+            'total_amount': total_amount,
+            'items_count': len(invoice_items)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f'Server error during checkout: {str(e)}'}), 500
 
 
 @sales_bp.route('/upload', methods=['POST'])
@@ -253,14 +399,15 @@ def upload_sales():
         db.session.commit()
         analytics_cache.clear()
         
-        # Save the name of the last successfully uploaded CSV file
+        # Save the name of the last successfully uploaded CSV file for this user
         if success_count > 0:
             try:
-                state = SystemState.query.filter_by(key='last_uploaded_filename').first()
+                state_key = f'last_uploaded_filename_{uid}'
+                state = SystemState.query.filter_by(key=state_key).first()
                 if state:
                     state.value = file.filename
                 else:
-                    state = SystemState(key='last_uploaded_filename', value=file.filename)
+                    state = SystemState(key=state_key, value=file.filename)
                     db.session.add(state)
                 db.session.commit()
             except Exception as e:
@@ -326,10 +473,10 @@ def get_analytics():
         # Get target source parameter
         source = request.args.get('source')
 
-        # Retrieve the last uploaded CSV filename from metadata
+        # Retrieve the last uploaded CSV filename from metadata for this user
         last_filename = "Active Catalog"
         try:
-            state = SystemState.query.filter_by(key='last_uploaded_filename').first()
+            state = SystemState.query.filter_by(key=f'last_uploaded_filename_{uid}').first()
             if state:
                 last_filename = state.value.strip()
         except Exception:
@@ -528,11 +675,11 @@ def get_analytics():
         total_orders_query = apply_source_filter(total_orders_query)
         total_orders = int(total_orders_query.scalar() or 0)
 
-        sales_count = db.session.query(func.count(Sale.id)).scalar()
+        sales_count = db.session.query(func.count(Sale.id)).filter(Sale.user_id == uid).scalar()
         if sales_count == 0:
             last_filename = "No sales recorded yet"
 
-        customers = Customer.query.all()
+        customers = Customer.query.filter_by(user_id=uid).all()
         pending_customers = [c for c in customers if c.balance > 0]
         udhar_total = sum(c.balance for c in pending_customers)
         udhar_count = len(pending_customers)
@@ -544,7 +691,7 @@ def get_analytics():
             'chart_data': chart_data,
             'top_products': [{'name': p[0], 'qty': int(p[1]), 'revenue': float(p[2])} for p in top_products],
             'category_data': category_data,
-            'total_products': Product.query.count(),
+            'total_products': Product.query.filter_by(user_id=uid).count(),
             'low_stock_count': low_stock_count,
             'last_uploaded_file': last_filename,
             'uploaded_files': uploaded_files,

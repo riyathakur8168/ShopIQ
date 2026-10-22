@@ -25,10 +25,14 @@ function validateLastName(v) {
 }
 
 function validatePhone(v) {
-  if (!v || !v.trim()) return 'Phone number is required.';
-  const digits = v.trim();
-  if (!DIGIT_ONLY.test(digits) || digits.length !== 10)
-    return 'Phone number must contain exactly 10 digits.';
+  if (!v || !v.trim()) return 'Mobile number is required.';
+  let digits = v.trim().replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length !== 10)
+    return 'Mobile number must contain exactly 10 digits.';
+  if (!/^[6-9]/.test(digits))
+    return `Invalid mobile number: Indian numbers cannot start with "${digits[0]}". Must start with 6, 7, 8, or 9.`;
   return '';
 }
 
@@ -71,10 +75,13 @@ function validateConfirmPassword(p, cp) {
 
 function validateForgotPhone(v) {
   if (!v || !v.trim()) return 'Mobile number is required.';
-  const digits = v.trim();
-  if (!DIGIT_ONLY.test(digits) || digits.length !== 10 || !/^[6-9]/.test(digits)) {
-    return 'Please enter a valid 10-digit Indian mobile number.';
-  }
+  let digits = v.trim().replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length !== 10)
+    return 'Mobile number must contain exactly 10 digits.';
+  if (!/^[6-9]/.test(digits))
+    return `Invalid mobile number: Indian numbers cannot start with "${digits[0]}". Must start with 6, 7, 8, or 9.`;
   return '';
 }
 
@@ -122,6 +129,7 @@ function AnimatedCounter({ value, duration = 800 }) {
     return () => clearInterval(timer);
   }, [value]);
 
+  return <span>{displayValue.toLocaleString()}</span>;
 }
 
 function LiveShowcase({ metrics }) {
@@ -481,11 +489,17 @@ function OtpVerifier({ type, value, isValueValid, onVerified }) {
     setError('');
     try {
       const res = await api.sendOtp(type, value);
-      setDevOtp(res.data.dev_otp || '');
-      setOtpInput('');
+      const code = res.data.dev_otp || '';
+      setDevOtp(code);
+      if (code) {
+        setOtpInput(code);
+        toast(`[DEV TRACKER] OTP: ${code} (Auto-filled)`, 'info');
+      } else {
+        setOtpInput('');
+      }
       setPhase('otp_sent');
       startTimer();
-      toast(`OTP sent to your ${type === 'email' ? 'email address' : 'mobile number'}`, 'success');
+      toast(res.data.message || `OTP sent to your ${type === 'email' ? 'email address' : 'mobile number'}`, 'success');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
       setPhase('idle');
@@ -585,9 +599,16 @@ function OtpVerifier({ type, value, isValueValid, onVerified }) {
 
           {/* Dev OTP hint */}
           {devOtp && (
-            <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">
-              [DEV] Your OTP is: <span className="tracking-widest">{devOtp}</span>
-            </p>
+            <div className="flex items-center justify-between text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-xl shadow-sm">
+              <span>[DEV TRACKER] OTP: <strong className="tracking-widest text-amber-950 font-black text-xs">{devOtp}</strong></span>
+              <button
+                type="button"
+                onClick={() => setOtpInput(devOtp)}
+                className="text-[10px] text-blue-600 hover:text-blue-800 font-extrabold underline ml-2"
+              >
+                Auto-fill
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -688,8 +709,11 @@ export default function Login() {
         if (field === 'first_name')       err = validateFirstName(value);
         else if (field === 'last_name')   err = validateLastName(value);
         else if (field === 'phone') {
-          // Only allow digits, strip non-digits silently, cap at 10
-          const digits = value.replace(/\D/g, '').slice(0, 10);
+          // Normalize Indian phone: strip non-digits, leading +91 or 0
+          let digits = value.replace(/\D/g, '');
+          if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+          if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+          digits = digits.slice(0, 10);
           next.phone = digits;
           err = validatePhone(digits);
         }
@@ -709,7 +733,10 @@ export default function Login() {
 
   // Phone: strip non-digits on change
   const handlePhoneChange = useCallback((value) => {
-    const digits = value.replace(/\D/g, '').slice(0, 10);
+    let digits = value.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+    digits = digits.slice(0, 10);
     setForm(prev => ({ ...prev, phone: digits }));
     if (touched['phone']) {
       setErrors(e => ({ ...e, phone: validatePhone(digits) }));
@@ -801,10 +828,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen md:h-screen md:overflow-hidden bg-[#F8FAFC] flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#F8FAFC] flex flex-col lg:flex-row font-sans">
       
-      {/* Left Column: Branding Section (45% width) */}
-      <div className="w-full md:w-[45%] md:h-full bg-slate-50 p-6 lg:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-200/60 flex-shrink-0 md:overflow-y-auto">
+      {/* Left Column: Branding Section (45% width on desktop) */}
+      <div className="w-full lg:w-[45%] lg:h-full bg-slate-50 p-5 sm:p-8 lg:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/60 flex-shrink-0 lg:overflow-y-auto">
         
         {/* Top brand header */}
         <div className="flex items-center gap-2.5">
@@ -815,9 +842,9 @@ export default function Login() {
         </div>
 
         {/* Center branding text & features */}
-        <div className="my-6 md:my-auto space-y-4">
+        <div className="my-5 lg:my-auto space-y-4">
           <div className="space-y-2">
-            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
               Smart POS &amp; Analytics for Retail Businesses
             </h1>
             <p className="text-xs lg:text-sm font-semibold text-slate-500">
@@ -825,7 +852,7 @@ export default function Login() {
             </p>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-2 sm:flex sm:flex-col gap-1.5 sm:gap-2">
             {[
               'Billing',
               'Inventory Management',
@@ -846,14 +873,14 @@ export default function Login() {
         </div>
 
         {/* Bottom copyright/footer info */}
-        <div className="text-[10px] font-semibold text-slate-400">
+        <div className="text-[10px] font-semibold text-slate-400 pt-3">
           © {new Date().getFullYear()} ShopIQ Inc. All rights reserved.
         </div>
       </div>
 
-      {/* Right Column: Authentication Form (55% width) */}
-      <div className="w-full md:w-[55%] md:h-full bg-[#F8FAFC] flex items-center justify-center p-6 md:p-10 md:overflow-y-auto">
-        <div className="w-full max-w-[420px] bg-white border border-slate-200/80 rounded-3xl p-6 lg:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.015)]">
+      {/* Right Column: Authentication Form (55% width on desktop) */}
+      <div className="w-full lg:w-[55%] lg:h-full bg-[#F8FAFC] flex items-center justify-center p-4 sm:p-6 lg:p-10 lg:overflow-y-auto">
+        <div className="w-full max-w-[440px] bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-5 sm:p-7 lg:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.015)] my-auto">
           {mode === 'forgot_password' ? (
             <div>
               {/* Form Header */}
@@ -934,11 +961,17 @@ export default function Login() {
                       setLoading(true);
                       try {
                         const res = await api.sendForgotPasswordOtp(forgotMethod, forgotValue);
-                        setForgotDevOtp(res.data.dev_otp || '');
+                        const code = res.data.dev_otp || '';
+                        setForgotDevOtp(code);
+                        if (code) {
+                          setForgotOtp(code);
+                          toast(`[DEV TRACKER] OTP: ${code} (Auto-filled)`, 'info');
+                        } else {
+                          setForgotOtp('');
+                        }
                         toast('If this account exists, an OTP has been sent.', 'success');
                         startForgotTimer();
                         setForgotStep('verify_otp');
-                        setForgotOtp('');
                       } catch (err) {
                         toast(err.response?.data?.message || 'Failed to request OTP.', 'error');
                       } finally {
@@ -994,7 +1027,12 @@ export default function Login() {
                         setLoading(true);
                         try {
                           const res = await api.sendForgotPasswordOtp(forgotMethod, forgotValue);
-                          setForgotDevOtp(res.data.dev_otp || '');
+                          const code = res.data.dev_otp || '';
+                          setForgotDevOtp(code);
+                          if (code) {
+                            setForgotOtp(code);
+                            toast(`[DEV TRACKER] OTP: ${code} (Auto-filled)`, 'info');
+                          }
                           toast('If this account exists, an OTP has been sent.', 'success');
                           startForgotTimer();
                         } catch {
@@ -1012,9 +1050,16 @@ export default function Login() {
 
                   {/* Dev OTP Box */}
                   {forgotDevOtp && (
-                    <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">
-                      [DEV] Your OTP is: <span className="tracking-widest">{forgotDevOtp}</span>
-                    </p>
+                    <div className="flex items-center justify-between text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-xl shadow-sm">
+                      <span>[DEV TRACKER] OTP: <strong className="tracking-widest text-amber-950 font-black text-xs">{forgotDevOtp}</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => setForgotOtp(forgotDevOtp)}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 font-extrabold underline ml-2"
+                      >
+                        Auto-fill
+                      </button>
+                    </div>
                   )}
 
                   <button

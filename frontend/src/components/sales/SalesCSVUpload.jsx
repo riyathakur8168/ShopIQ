@@ -90,7 +90,9 @@ export default function SalesCSVUpload({ recentUploads, setRecentUploads, setAct
       }
       setRecentUploads(prev => [{ name: file.name, date: new Date().toLocaleString(), success: res.data.success_count }, ...prev]);
       setFile(null);
-      setActiveTab('Analytics');
+      if (typeof setActiveTab === 'function') {
+        setActiveTab('Deep Analytics');
+      }
       window.dispatchEvent(new Event('update-notifications'));
     } catch (err) {
       toast(err.response?.data?.message || 'Upload failed', 'error');

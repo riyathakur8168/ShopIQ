@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import DashboardTab from './DashboardTab';
 import Sales from './Sales';
 import Inventory from './Inventory';
 import Customers from './Customers';
 import Settings from './Settings';
 import POSCounter from './POSCounter';
 import Suppliers from './Suppliers';
+import AIAssistant from './AIAssistant';
 import { useAuth } from '../context/AuthContext';
 import { getInventoryNotifications } from '../services/api';
 
@@ -32,13 +32,14 @@ export default function Dashboard() {
 
   const renderPage = () => {
     switch (activeTab) {
-      case 'POS Counter': return <POSCounter setActiveTab={setActiveTab} />;
-      case 'Analytics':   return <Sales setActiveTab={setActiveTab} />;
-      case 'Inventory':   return <Inventory />;
-      case 'Customers':   return <Customers />;
-      case 'Suppliers':   return <Suppliers />;
-      case 'Settings':    return <Settings />;
-      default:            return <POSCounter setActiveTab={setActiveTab} />;
+      case 'POS Counter':  return <POSCounter setActiveTab={setActiveTab} />;
+      case 'Analytics':    return <Sales setActiveTab={setActiveTab} />;
+      case 'Inventory':    return <Inventory />;
+      case 'Customers':    return <Customers />;
+      case 'Suppliers':    return <Suppliers />;
+      case 'AI Assistant': return <AIAssistant />;
+      case 'Settings':     return <Settings />;
+      default:             return <POSCounter setActiveTab={setActiveTab} />;
     }
   };
 

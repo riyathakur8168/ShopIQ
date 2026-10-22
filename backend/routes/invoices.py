@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
-from models import Invoice, Product
+from models import Invoice
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, date
 import json
@@ -29,13 +29,25 @@ def create_invoice():
         return jsonify({'message': 'Missing required fields'}), 400
 
     items = data['items']
-    total = sum(float(item.get('qty', 1)) * float(item.get('price', 0)) for item in items)
+    if not isinstance(items, list) or len(items) == 0:
+        return jsonify({'message': 'Items must be a non-empty list'}), 400
+
+    try:
+        total = sum(float(item.get('qty', 1)) * float(item.get('price', 0)) for item in items)
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid price or quantity in items'}), 400
+
+    date_str = data.get('date') or date.today().strftime('%Y-%m-%d')
+    try:
+        inv_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        inv_date = date.today()
 
     invoice = Invoice(
-        customer_name=data['customer_name'],
+        customer_name=str(data['customer_name']).strip(),
         items_json=json.dumps(items),
-        total_amount=total,
-        invoice_date=datetime.strptime(data.get('date', date.today().strftime('%Y-%m-%d')), '%Y-%m-%d').date(),
+        total_amount=round(total, 2),
+        invoice_date=inv_date,
         user_id=uid
     )
     db.session.add(invoice)

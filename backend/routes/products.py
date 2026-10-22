@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
-from models import Product, Sale
+from models import Product, Sale, Category
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import os
 import sys
@@ -14,7 +14,6 @@ def _uid():
 @jwt_required()
 def get_categories():
     uid = _uid()
-    from models import Category
     # Return categories owned by this user, ordered by name
     categories = Category.query.filter_by(user_id=uid).order_by(Category.name.asc()).all()
     return jsonify([cat.to_dict() for cat in categories]), 200
@@ -30,7 +29,6 @@ def add_category():
     name = data['name'].strip()
     normalized_name = name.title() if name.lower() != 'general' else 'General'
 
-    from models import Category
     existing = Category.query.filter(
         db.func.lower(Category.name) == normalized_name.lower(),
         Category.user_id == uid
@@ -48,7 +46,6 @@ def add_category():
 @jwt_required()
 def rename_category(category_id):
     uid = _uid()
-    from models import Category
     cat = Category.query.filter_by(id=category_id, user_id=uid).first()
     if not cat:
         return jsonify({'message': 'Category not found'}), 404
@@ -78,7 +75,6 @@ def rename_category(category_id):
 @jwt_required()
 def delete_category(category_id):
     uid = _uid()
-    from models import Category
     cat = Category.query.filter_by(id=category_id, user_id=uid).first()
     if not cat:
         return jsonify({'message': 'Category not found'}), 404
@@ -117,7 +113,6 @@ def get_products():
         safe_search = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         query = query.filter(Product.name.ilike(f'%{safe_search}%', escape='\\'))
     if category and category != 'All':
-        from models import Category
         query = query.join(Category, Product.category_id == Category.id).filter(db.func.lower(Category.name) == category.lower())
 
     query = query.order_by(Product.id.desc())
@@ -182,7 +177,6 @@ def get_notifications():
         'count': len(notifications)
     }), 200
 
-from models import Category
 
 def _resolve_category(name, uid):
     if not name:
@@ -273,6 +267,12 @@ def delete_product(product_id):
     product = Product.query.filter_by(id=product_id, user_id=uid).first()
     if not product:
         return jsonify({'message': 'Product not found'}), 404
+
+    sales_count = Sale.query.filter_by(product_id=product_id, user_id=uid).count()
+    if sales_count > 0:
+        return jsonify({
+            'message': f'Cannot delete "{product.name}" because it has {sales_count} recorded sales. Deleting it would corrupt your financial reports.'
+        }), 400
 
     old_cat_id = product.category_id
     db.session.delete(product)

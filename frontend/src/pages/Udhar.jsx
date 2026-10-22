@@ -1,1 +1,2 @@
-// This file is deprecated and no longer used. See Customers.jsx.
+// Re-export Customers for backward compatibility
+export { default } from './Customers';
