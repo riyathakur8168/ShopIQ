@@ -12,6 +12,7 @@ timeout /t 2 /nobreak >nul
 echo [2/2] Launching Frontend Server (Vite on port 5173)...
 start "ShopIQ Frontend" "%~dp0run_frontend.bat"
 
+
 echo.
 echo ========================================================
 echo  Both servers have been launched in separate windows!
