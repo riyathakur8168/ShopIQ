@@ -8,3 +8,4 @@ if exist "venv\Scripts\activate.bat" (
 echo [ShopIQ] Starting Flask Backend on http://localhost:5000 ...
 python app.py
 pause
+
