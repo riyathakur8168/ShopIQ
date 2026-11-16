@@ -6,6 +6,7 @@ Write-Host ""
 
 $root = $PSScriptRoot
 
+
 Write-Host "[1/2] Launching Backend Server on port 5000..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\backend'; if (Test-Path 'venv\Scripts\Activate.ps1') { .\venv\Scripts\Activate.ps1 }; python app.py"
 
